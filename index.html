@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6c5ce7">
+<title>Daily Math Quiz – True or False?</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:"Trebuchet MS","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;color:#2d2a4a;min-height:100vh;
+ background:linear-gradient(160deg,#6c5ce7 0%,#a29bfe 35%,#74b9ff 70%,#55efc4 100%);background-attachment:fixed;padding:14px 12px 40px}
+#app{max-width:760px;margin:0 auto}
+.card{background:#fff;border-radius:26px;padding:20px 18px;margin:12px 0;box-shadow:0 8px 0 rgba(45,42,74,.12),0 14px 30px rgba(45,42,74,.18)}
+h1{margin:0;font-size:clamp(26px,6vw,38px);color:#fff;text-shadow:0 3px 0 rgba(45,42,74,.25);text-align:center}
+.sub{color:#fff;text-align:center;font-weight:700;margin:4px 0 8px;text-shadow:0 2px 0 rgba(45,42,74,.2)}
+h2{margin:6px 0 10px;font-size:clamp(22px,5vw,30px)}
+h3{margin:14px 0 6px;font-size:19px}
+p{font-size:19px;line-height:1.45;margin:8px 0}
+.badge{display:inline-block;background:#ffeaa7;color:#6c4a00;border-radius:999px;padding:6px 14px;font-weight:800;font-size:16px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.btn{display:block;width:100%;border:0;border-radius:20px;padding:18px 16px;min-height:64px;font:inherit;font-size:22px;font-weight:900;color:#fff;cursor:pointer;
+ box-shadow:0 6px 0 rgba(0,0,0,.22);transition:transform .08s,box-shadow .08s;margin:10px 0}
+.btn:active{transform:translateY(5px);box-shadow:0 1px 0 rgba(0,0,0,.22)}
+.btn.go{background:#6c5ce7}.btn.alt{background:#00b894}.btn.warm{background:#e17055}.btn.blue{background:#0984e3}.btn.gray{background:#636e72}
+.btn:disabled{opacity:.55}
+.tf{display:flex;gap:14px}
+.tf .btn{min-height:96px;font-size:clamp(26px,7vw,36px)}
+.btn.t{background:#00b894}.btn.f{background:#ff7675}
+.progress{height:20px;background:#dfe6e9;border-radius:99px;overflow:hidden;margin:8px 0}
+.progress i{display:block;height:100%;background:linear-gradient(90deg,#fdcb6e,#fd79a8,#6c5ce7);border-radius:99px;transition:width .35s}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:900;font-size:19px;flex-wrap:wrap}
+.pill{background:#f1f2ff;border-radius:99px;padding:6px 14px}
+.if{font-size:clamp(22px,5.5vw,30px);font-weight:800;text-align:center;margin:10px 0 4px}
+.eq{font-size:clamp(34px,10vw,58px);font-weight:900;text-align:center;background:#f6f4ff;border:4px dashed #a29bfe;border-radius:22px;padding:18px 8px;margin:12px 0;letter-spacing:1px;color:#4834d4;overflow-wrap:anywhere}
+.ask{text-align:center;font-size:22px;font-weight:800;margin:8px 0}
+.fb{border-radius:22px;padding:16px;margin-top:14px}
+.fb.good{background:#e6fff6;border:3px solid #00b894}
+.fb.try{background:#fff6e6;border:3px solid #fdcb6e}
+.fb h3{margin-top:0}
+.steps{margin:6px 0 4px;padding-left:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;position:relative;background:#fff;border-radius:14px;padding:10px 12px 10px 46px;margin:7px 0;font-size:19px;line-height:1.4;font-weight:600;overflow-wrap:anywhere}
+.steps li:before{content:counter(s);position:absolute;left:10px;top:9px;width:28px;height:28px;border-radius:50%;background:#6c5ce7;color:#fff;font-weight:900;text-align:center;line-height:28px;font-size:16px}
+.tip{background:#eaf4ff;border-left:8px solid #0984e3;border-radius:14px;padding:10px 12px;font-size:18px;font-weight:600;margin-top:10px}
+.big{font-size:clamp(54px,16vw,96px);font-weight:900;text-align:center;color:#6c5ce7;line-height:1}
+.stars{text-align:center;font-size:42px;letter-spacing:6px}
+.msg{background:#fff3cd;border-radius:18px;padding:12px 14px;font-size:20px;font-weight:700;margin:10px 0}
+.rev{border:3px solid #eee;border-radius:18px;margin:10px 0;overflow:hidden}
+.rev summary{padding:12px 14px;font-size:18px;font-weight:700;cursor:pointer;list-style:none}
+.rev summary::-webkit-details-marker{display:none}
+.rev.ok summary{background:#e6fff6}.rev.no summary{background:#fff3e0}
+.rev .inner{padding:4px 12px 12px}
+.parent{color:#fff;margin-top:26px}
+.parent summary{cursor:pointer;font-weight:800;text-align:center;font-size:16px;opacity:.9;padding:10px}
+.parent .card{color:#2d2a4a}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{padding:6px 5px;border-bottom:1px solid #eee;text-align:left;vertical-align:top}
+select{font:inherit;font-size:18px;padding:10px;border-radius:12px;border:2px solid #a29bfe}
+.small{font-size:15px;color:#555}
+.pop{animation:pop .35s}
+@keyframes pop{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
+@media (prefers-reduced-motion:reduce){.pop{animation:none}.progress i{transition:none}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<noscript><div class="card"><p>This quiz needs JavaScript turned on. Please enable it and reload.</p></div></noscript>
+<script id="gen">
+var QuizGen=(function(){
+'use strict';
+var MINUS='\u2212',TIMES='\u00d7',DIV='\u00f7';
+var PREC={'+':1,'\u2212':1,'\u00d7':2,'\u00f7':2};
+var KIND_LABELS={addsub:'Adding & subtracting',muldiv:'Multiplying & dividing',twostep:'Two-step puzzles',parens:'Parentheses',both:'Mystery number on both sides',order:'Order of operations',multi:'Multi-step challenges'};
+var LEVEL_NAMES=['Number Newbie','Times-Table Tiger','Number Ninja','Puzzle Solver','Equation Explorer','Brain Builder','Balance Master','Parentheses Pro','Algebra Ace','Math Wizard'];
+var POOLS={
+ 1:[['addsub',0]],
+ 2:[['muldiv',0]],
+ 3:[['addsub',1],['muldiv',1]],
+ 4:[['twostep',0]],
+ 5:[['twostep',1],['parens',0]],
+ 6:[['both',0],['order',0]],
+ 7:[['both',1],['parens',1]],
+ 8:[['multi',0],['order',1],['twostep',2]],
+ 9:[['both',2],['multi',1]],
+ 10:[['both',3],['multi',2],['order',1]]
+};
+/* ---------- random ---------- */
+function hashSeed(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}
+ h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0;}
+function rngFromSeed(str){var a=hashSeed(String(str));return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function ri(r,a,b){return a+Math.floor(r()*(b-a+1));}
+function pick(r,a){return a[Math.floor(r()*a.length)];}
+function shuffle(r,a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(r()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
+/* ---------- expression trees ---------- */
+function N(n){return {t:'n',v:n};}
+function V(){return {t:'v'};}
+function B(op,a,b,par){return {t:'o',op:op,a:a,b:b,par:!!par};}
+function hasV(n){return n.t==='v'||(n.t==='o'&&(hasV(n.a)||hasV(n.b)));}
+function needs(c,p,isRight){if(c.t!=='o')return false;if(c.par)return true;if(PREC[c.op]<PREC[p.op])return true;
+ if(isRight&&PREC[c.op]===PREC[p.op]&&(p.op===MINUS||p.op===DIV))return true;return false;}
+function show(n,name){if(n.t==='n')return String(n.v);if(n.t==='v')return name;
+ var l=show(n.a,name),r=show(n.b,name);if(needs(n.a,n,false))l='('+l+')';if(needs(n.b,n,true))r='('+r+')';return l+' '+n.op+' '+r;}
+function evalN(n,val){if(n.t==='n')return n.v;if(n.t==='v')return val;
+ var a=evalN(n.a,val);if(a===null)return null;var b=evalN(n.b,val);if(b===null)return null;var r;
+ if(n.op==='+')r=a+b;else if(n.op===MINUS)r=a-b;else if(n.op===TIMES)r=a*b;else{if(b===0||a%b!==0)return null;r=a/b;}
+ return r<0?null:r;}
+function subst(n,val){if(n.t==='n')return N(n.v);if(n.t==='v')return N(val);return {t:'o',op:n.op,a:subst(n.a,val),b:subst(n.b,val),par:n.par};}
+function collect(n,depth,out){if(n.t!=='o')return;
+ collect(n.a,depth+(needs(n.a,n,false)?1:0),out);
+ if(n.a.t==='n'&&n.b.t==='n')out.push({node:n,depth:depth});
+ collect(n.b,depth+(needs(n.b,n,true)?1:0),out);}
+function reduceSteps(n){var steps=[];var guard=0;
+ while(n.t==='o'&&guard++<20){var c=[];collect(n,0,c);var best=null;
+  for(var i=0;i<c.length;i++){var x=c[i];if(!best||x.depth>best.depth||(x.depth===best.depth&&PREC[x.node.op]>PREC[best.node.op]))best=x;}
+  var nd=best.node;var before=show(nd,'?');var val=evalN(nd,0);
+  nd.t='n';nd.v=val;delete nd.a;delete nd.b;delete nd.op;
+  steps.push({what:before+' = '+val,now:n.t==='n'?'':show(n,'?')});}
+ return {steps:steps,value:evalN(n,0)};}
+/* ---------- unwinding (opposite operations) ---------- */
+function unwind(node,T,name){var pre=[],lines=[],chain=[],cur=node,target=T;
+ while(cur.t==='o'){var varLeft=hasV(cur.a);var sub=varLeft?cur.a:cur.b,other=varLeft?cur.b:cur.a;var c=evalN(other,0);
+  if(other.t==='o')pre.push('First work out the number part: '+show(other,name)+' = '+c+'.');
+  var nw,txt,op=cur.op;
+  if(op==='+'){nw=target-c;txt='Undo "+ '+c+'" with its opposite, "'+MINUS+' '+c+'":  '+target+' '+MINUS+' '+c+' = '+nw;}
+  else if(op===MINUS){
+   if(varLeft){nw=target+c;txt='Undo "'+MINUS+' '+c+'" with its opposite, "+ '+c+'":  '+target+' + '+c+' = '+nw;}
+   else{nw=c-target;txt=c+' '+MINUS+' ? = '+target+'. What did we take away from '+c+'? '+c+' '+MINUS+' '+target+' = '+nw;}}
+  else if(op===TIMES){nw=target/c;txt='Undo "'+TIMES+' '+c+'" with its opposite, "'+DIV+' '+c+'":  '+target+' '+DIV+' '+c+' = '+nw;}
+  else{
+   if(varLeft){nw=target*c;txt='Undo "'+DIV+' '+c+'" with its opposite, "'+TIMES+' '+c+'":  '+target+' '+TIMES+' '+c+' = '+nw;}
+   else{nw=c/target;txt=c+' '+DIV+' ? = '+target+'. How many in each group? '+c+' '+DIV+' '+target+' = '+nw;}}
+  chain.push({op:op,varLeft:varLeft,c:c});
+  lines.push(txt+'   \u2192   '+show(sub,name)+' = '+nw);
+  cur=sub;target=nw;}
+ return {pre:pre,lines:lines,chain:chain,answer:target};}
+function chainRun(chain,T,wrongAt){var val=T;
+ for(var i=0;i<chain.length;i++){var s=chain[i],c=s.c,w=(i===wrongAt),res;
+  if(s.op==='+')res=w?val+c:val-c;
+  else if(s.op===MINUS)res=s.varLeft?(w?val-c:val+c):(w?c+val:c-val);
+  else if(s.op===TIMES){if(w)res=val*c;else{if(val%c!==0)return null;res=val/c;}}
+  else{if(s.varLeft){if(w){if(val%c!==0)return null;res=val/c;}else res=val*c;}
+   else{if(w)res=c*val;else{if(val===0||c%val!==0)return null;res=c/val;}}}
+  if(res<0||res!==Math.floor(res))return null;val=res;}
+ return val;}
+/* ---------- both-sides explanation: a*x + b = c*x + d ---------- */
+function xs(k,vn){return k===1?vn:k+' '+TIMES+' '+vn;}
+function linLines(lin,vn,pre){var a=lin.a,b=lin.b,c=lin.c,d=lin.d,k=a-c,L=[];
+ if(pre)for(var i=0;i<pre.length;i++)L.push(pre[i]);
+ L.push('Both sides have '+vn+'. To keep things balanced, take away '+xs(c,vn)+' from BOTH sides:   '+xs(k,vn)+(b>=0?' + '+b:' '+MINUS+' '+(-b))+' = '+d);
+ var e;
+ if(b>0){e=d-b;L.push('Undo "+ '+b+'" with its opposite, "'+MINUS+' '+b+'":  '+d+' '+MINUS+' '+b+' = '+e+'   \u2192   '+xs(k,vn)+' = '+e);}
+ else if(b<0){e=d-b;L.push('Undo "'+MINUS+' '+(-b)+'" with its opposite, "+ '+(-b)+'":  '+d+' + '+(-b)+' = '+e+'   \u2192   '+xs(k,vn)+' = '+e);}
+ else e=d;
+ if(k>1){L.push('Undo "'+TIMES+' '+k+'" with its opposite, "'+DIV+' '+k+'":  '+e+' '+DIV+' '+k+' = '+(e/k)+'   \u2192   '+vn+' = '+(e/k));}
+ return {lines:L,answer:e/k};}
+/* ---------- kinds ---------- */
+function term(r,a){if(a===1)return V();return r()<0.5?B(TIMES,N(a),V()):B(TIMES,V(),N(a));}
+function kAddsub(r,t){var s,c,T,L,v;
+ if(t===0){v=ri(r,1,3);c=ri(r,1,9);
+  if(v===3){T=ri(r,1,10);s=T+c;L=B(MINUS,V(),N(c));}
+  else{s=ri(r,1,10);T=s+c;L=v===1?B('+',V(),N(c)):B('+',N(c),V());}}
+ else{v=ri(r,1,4);
+  if(v<=2){c=ri(r,8,70);s=ri(r,8,90);T=s+c;L=v===1?B('+',V(),N(c)):B('+',N(c),V());}
+  else if(v===3){c=ri(r,5,60);T=ri(r,5,70);s=T+c;L=B(MINUS,V(),N(c));}
+  else{c=ri(r,20,100);T=ri(r,5,c-5);s=c-T;L=B(MINUS,N(c),V());}}
+ return {L:L,R:N(T),s:s};}
+function kMuldiv(r,t){var a,s,q,T,L,v;
+ if(t===0){a=ri(r,2,9);v=ri(r,1,3);
+  if(v===3){q=ri(r,2,9);s=a*q;L=B(DIV,V(),N(a));T=q;}
+  else{s=ri(r,2,9);T=a*s;L=v===1?B(TIMES,N(a),V()):B(TIMES,V(),N(a));}}
+ else{v=ri(r,1,4);
+  if(v<=2){a=ri(r,3,12);s=ri(r,3,15);T=a*s;L=v===1?B(TIMES,N(a),V()):B(TIMES,V(),N(a));}
+  else if(v===3){a=ri(r,2,12);q=ri(r,2,15);s=a*q;L=B(DIV,V(),N(a));T=q;}
+  else{T=ri(r,2,12);s=ri(r,2,12);L=B(DIV,N(T*s),V());}}
+ return {L:L,R:N(T),s:s};}
+function kTwostep(r,t){var sMax=[10,20,30][t],bMax=[9,30,60][t],aMax=[6,9,12][t];
+ var v=ri(r,1,t===0?3:6),a,s,b,T,L,q;
+ if(v===1){a=ri(r,2,aMax);s=ri(r,1,sMax);b=ri(r,1,bMax);T=a*s+b;L=B('+',term(r,a),N(b));}
+ else if(v===2){a=ri(r,2,aMax);s=ri(r,2,sMax);b=ri(r,1,Math.min(bMax,a*s-1));T=a*s-b;L=B(MINUS,term(r,a),N(b));}
+ else if(v===3){a=ri(r,2,aMax);s=ri(r,1,sMax);b=ri(r,1,bMax);T=a*s+b;L=B('+',N(b),term(r,a));}
+ else if(v===4){a=ri(r,2,t===1?9:12);q=ri(r,2,t===1?12:20);b=ri(r,1,bMax);s=a*q;T=q+b;L=B('+',B(DIV,V(),N(a),true),N(b));}
+ else if(v===5){a=ri(r,2,t===1?9:12);b=ri(r,1,t===1?12:30);T=ri(r,1,t===1?12:20);q=T+b;s=a*q;L=B(MINUS,B(DIV,V(),N(a),true),N(b));}
+ else{a=ri(r,2,aMax);s=ri(r,1,sMax);T=ri(r,1,bMax);var c=T+a*s;L=B(MINUS,N(c),term(r,a));}
+ return {L:L,R:N(T),s:s};}
+function kParens(r,t){var a=ri(r,2,t?9:6),b=ri(r,1,t?20:9),v=ri(r,1,4),s,T,L;
+ if(v===1){s=ri(r,1,t?20:12);T=a*(s+b);L=r()<0.5?B(TIMES,N(a),B('+',V(),N(b))):B(TIMES,B('+',V(),N(b)),N(a));}
+ else if(v===2){s=b+ri(r,1,t?20:10);T=a*(s-b);L=B(TIMES,N(a),B(MINUS,V(),N(b)));}
+ else if(v===3){T=ri(r,2,t?15:10);b=ri(r,1,Math.min(t?20:9,a*T-1));s=a*T-b;L=B(DIV,B('+',V(),N(b)),N(a));}
+ else{T=ri(r,2,t?15:10);s=a*T+b;L=B(DIV,B(MINUS,V(),N(b)),N(a));}
+ return {L:L,R:N(T),s:s};}
+function lhsAxb(r,a,b){var t=term(r,a);return b>=0?B('+',t,N(b)):B(MINUS,t,N(-b));}
+function kBoth(r,t,vn){var a,b,c,d,s,k,L,R,pre=null,lin;
+ if(t===0){c=r()<0.7?1:2;k=ri(r,1,3);a=c+k;s=ri(r,1,12);
+  if(r()<0.75){b=ri(r,1,9);d=k*s+b;}else{b=-ri(r,1,Math.max(1,Math.min(9,a*s-1)));if(k*s+b<1){b=-1;}d=k*s+b;}
+  L=lhsAxb(r,a,b);R=B('+',term(r,c),N(d));lin={a:a,b:b,c:c,d:d};}
+ else if(t===1){var m=ri(r,1,10);
+  if(m<=7){c=ri(r,1,4);k=ri(r,1,4);a=c+k;s=ri(r,1,20);
+   if(m<=5||k*s<3){b=ri(r,1,30);d=k*s+b;}else{b=-ri(r,1,Math.min(30,k*s-1));d=k*s+b;}
+   L=lhsAxb(r,a,b);R=B('+',term(r,c),N(d));lin={a:a,b:b,c:c,d:d};}
+  else{a=ri(r,2,4);c=ri(r,1,a-1);var b2=ri(r,1,6);s=ri(r,1,15);k=a-c;d=k*s+a*b2;
+   L=B(TIMES,N(a),B('+',V(),N(b2)));R=B('+',term(r,c),N(d));lin={a:a,b:a*b2,c:c,d:d};
+   pre=['Multiply out the parentheses: '+a+' '+TIMES+' ('+vn+' + '+b2+') means '+a+' '+TIMES+' '+vn+' + '+a+' '+TIMES+' '+b2+', which is '+xs(a,vn)+' + '+(a*b2)+'.'];}}
+ else if(t===2){a=ri(r,3,6);c=ri(r,2,a-1);var bb=ri(r,1,8),dd=ri(r,1,8);s=ri(r,1,15);k=a-c;
+  var e=k*s+a*bb-c*dd;if(e<1){s+=Math.ceil((1-e)/k);e=k*s+a*bb-c*dd;}
+  L=B(TIMES,N(a),B('+',V(),N(bb)));R=B('+',B(TIMES,N(c),B('+',V(),N(dd))),N(e));
+  lin={a:a,b:a*bb,c:c,d:c*dd+e};
+  pre=['Multiply out the parentheses on both sides: '+a+' '+TIMES+' ('+vn+' + '+bb+') = '+xs(a,vn)+' + '+(a*bb)+'  and  '+c+' '+TIMES+' ('+vn+' + '+dd+') + '+e+' = '+xs(c,vn)+' + '+(c*dd)+' + '+e+' = '+xs(c,vn)+' + '+(c*dd+e)+'.'];}
+ else{c=ri(r,2,5);k=ri(r,1,3);a=c+k;s=ri(r,2,15);var d3=Math.ceil((k*s+1)/c)+ri(r,0,3);b=c*d3-k*s;
+  L=B(DIV,B('+',term(r,a),N(b)),N(c));R=B('+',V(),N(d3));
+  lin={a:a,b:b,c:c,d:c*d3};
+  pre=['The left side is divided by '+c+'. Multiply BOTH sides by '+c+' to cancel it:  '+xs(a,vn)+' + '+b+' = '+c+' '+TIMES+' ('+vn+' + '+d3+') = '+xs(c,vn)+' + '+(c*d3)+'.'];}
+ var ll=linLines(lin,vn,pre);
+ return {L:L,R:R,s:s,custom:ll,noFlip:true};}
+function kOrder(r,t){var big=t>=1,a,b,c,s,T,L,q,v=ri(r,1,t===0?3:5);
+ a=ri(r,big?3:2,big?12:9);b=ri(r,big?3:2,big?12:9);
+ if(v===1){s=ri(r,1,big?40:15);T=s+a*b;L=B('+',V(),B(TIMES,N(a),N(b)));}
+ else if(v===2){s=ri(r,1,a*b-1);T=a*b-s;L=B(MINUS,B(TIMES,N(a),N(b)),V());}
+ else if(v===3){c=ri(r,2,9);s=ri(r,1,big?15:9);var c2=ri(r,2,big?9:6);T=c*s+a*c2;L=B('+',B(TIMES,V(),N(c)),B(TIMES,N(a),N(c2)));}
+ else if(v===4){c=ri(r,2,9);q=ri(r,2,big?12:8);s=c*q;var c3=ri(r,2,big?9:6);T=q+a*c3;L=B('+',B(DIV,V(),N(c),true),B(TIMES,N(a),N(c3)));}
+ else{s=ri(r,2,big?15:9);T=(a+b)*s;L=B(TIMES,B('+',N(a),N(b),true),V());}
+ return {L:L,R:N(T),s:s};}
+function kMulti(r,t){var aMax=[6,9,12][t],sMax=[10,15,25][t],v=ri(r,1,t===0?3:4),a,b,c,s,T,L,q;
+ if(v===1){a=ri(r,2,aMax);b=ri(r,1,9+t*5);s=ri(r,1,sMax);var base=a*(s+b);c=ri(r,1,Math.min(30,base-1));T=base-c;L=B(MINUS,B(TIMES,N(a),B('+',V(),N(b))),N(c));}
+ else if(v===2){a=ri(r,2,aMax);q=ri(r,2,t?12:8);b=ri(r,1,9);c=ri(r,2,t?9:6);s=a*q;T=(q+b)*c;L=B(TIMES,B('+',B(DIV,V(),N(a),true),N(b)),N(c));}
+ else if(v===3){a=ri(r,2,aMax);s=ri(r,2,sMax);c=ri(r,2,Math.min(6,a*s-1));T=ri(r,1,Math.floor((a*s-1)/c));b=a*s-c*T;L=B(DIV,B(MINUS,term(r,a),N(b)),N(c));}
+ else{a=ri(r,2,aMax);q=ri(r,2,t>=2?15:10);b=ri(r,1,Math.min(12,a*q-1));s=a*q-b;T=ri(r,1,12);c=q+T;L=B(MINUS,N(c),B(DIV,B('+',V(),N(b)),N(a)));}
+ return {L:L,R:N(T),s:s};}
+var BUILD={addsub:kAddsub,muldiv:kMuldiv,twostep:kTwostep,parens:kParens,both:kBoth,order:kOrder,multi:kMulti};
+/* ---------- pool selection ---------- */
+function poolFor(level,miss){var out=[],kinds={},i,e;
+ var p=POOLS[level];
+ for(i=0;i<p.length;i++){e=p[i];kinds[e[0]]=1;out.push({kind:e[0],tier:e[1],w:1+Math.min(9,3*(miss&&miss[e[0]]||0))});}
+ if(miss){for(var k in miss){if(!miss[k]||kinds[k])continue;
+   for(var l=level-1;l>=1;l--){var q=POOLS[l],found=null;for(i=0;i<q.length;i++)if(q[i][0]===k)found=q[i];
+    if(found){out.push({kind:k,tier:found[1],w:Math.min(4,miss[k])});break;}}}}
+ return out;}
+function pickWeighted(r,list){var tot=0,i;for(i=0;i<list.length;i++)tot+=list[i].w;var x=r()*tot;
+ for(i=0;i<list.length;i++){x-=list[i].w;if(x<0)return list[i];}return list[list.length-1];}
+/* ---------- plug-in explanation ---------- */
+function plugLines(L,R,vn,p){var lines=[];
+ lines.push('Swap '+vn+' for '+p+':   '+show(subst(L,p),vn)+' = '+show(subst(R,p),vn));
+ function side(node,label){
+  if(node.t==='n'){lines.push(label+' side is just '+node.v+'.');return;}
+  var rs=reduceSteps(subst(node,p));
+  for(var i=0;i<rs.steps.length;i++){var st=rs.steps[i];
+   lines.push(label+' side: '+st.what+(st.now?',  so it becomes  '+st.now:''));}
+  if(rs.steps.length>1)lines.push(label+' side = '+rs.value);}
+ side(L,'Left');side(R,'Right');
+ var lv=evalN(L,p),rv=evalN(R,p);
+ lines.push('Left side is '+lv+' and right side is '+rv+'.  '+(lv===rv?'They match, so it is TRUE! \u2705':'They are different, so it is FALSE.'));
+ return {lines:lines,lv:lv,rv:rv};}
+var LETTERS='abcdefghkmnpqrstwxyz';
+function makeQuestion(o){var level=o.level;
+ for(var attempt=0;attempt<60;attempt++){
+  var r=rngFromSeed(o.seed+(attempt?'#'+attempt:''));
+  var ent=pickWeighted(r,poolFor(level,o.miss));
+  var letter=LETTERS.charAt(ri(r,0,LETTERS.length-1));var vn=r()<0.4?letter.toUpperCase():letter;
+  var eq=BUILD[ent.kind](r,ent.tier,vn);var L=eq.L,R=eq.R,s=eq.s;
+  if(evalN(L,s)===null||evalN(L,s)!==evalN(R,s))continue;
+  if(level>=3&&!eq.noFlip&&r()<0.3){var tmp=L;L=R;R=tmp;}
+  /* explanation of how to find the variable */
+  var solve,chain=null,tipExtra='',oneSided=hasV(L)!==hasV(R);
+  if(oneSided){var vs=hasV(L)?L:R,cs=hasV(L)?R:L,T=evalN(cs,0);
+   var un=unwind(vs,T,vn);if(un.answer!==s)continue;chain=un.chain;
+   solve=[];if(cs.t==='o')solve.push('First work out the number side: '+show(cs,vn)+' = '+T+'.');
+   for(var i=0;i<un.pre.length;i++)solve.push(un.pre[i]);
+   solve=solve.concat(un.lines);}
+  else{if(!eq.custom||eq.custom.answer!==s)continue;solve=eq.custom.lines;}
+  /* pick proposed value */
+  var p=s;
+  if(!o.wantTrue){var cand=[],i2;
+   if(chain){for(i2=0;i2<chain.length;i2++){var w=chainRun(chain,evalN(oneSided&&hasV(L)?R:L,0),i2);
+     if(w!==null){cand.push(w);cand.push(w);}}}
+   cand.push(s+1,s-1,s+1,s-1,s+2,s-2);
+   (function leaves(n){if(n.t==='n')cand.push(n.v);else if(n.t==='o'){leaves(n.a);leaves(n.b);}})(L);
+   (function leaves(n){if(n.t==='n')cand.push(n.v);else if(n.t==='o'){leaves(n.a);leaves(n.b);}})(R);
+   var ok=[];for(i2=0;i2<cand.length;i2++){var x=cand[i2];
+    if(x>=1&&x!==s&&x<=Math.max(2*s+6,s+15)){var a1=evalN(L,x),b1=evalN(R,x);if(a1!==null&&b1!==null&&a1!==b1)ok.push(x);}}
+   if(!ok.length){for(var d=1;d<=80&&!ok.length;d++){var xs2=[s+d,s-d];
+     for(var j=0;j<2;j++){var xv=xs2[j];if(xv>=1){var a2=evalN(L,xv),b2=evalN(R,xv);if(a2!==null&&b2!==null&&a2!==b2)ok.push(xv);}}}}
+   if(!ok.length)continue;
+   p=pick(r,ok);}
+  var lv=evalN(L,p),rv=evalN(R,p);if(lv===null||rv===null)continue;
+  var truth=(lv===rv);if(truth!==!!o.wantTrue)continue;
+  var eqText=show(L,vn)+' = '+show(R,vn);
+  var text='If '+vn+' = '+p+', is '+eqText+' true or false?';
+  if(o.avoid&&o.avoid.indexOf(text)>=0&&attempt<40)continue;
+  var plug=plugLines(L,R,vn,p);
+  var undo=solve.slice();undo.push('So '+vn+' should be '+s+(truth?'.':', not '+p+'.'));
+  var tip;
+  if(chain){var seen={},bits=[];for(var m=0;m<chain.length;m++){var op=chain[m].op;if(seen[op])continue;seen[op]=1;
+    var opp=op==='+'?MINUS:op===MINUS?'+':op===TIMES?DIV:TIMES;bits.push('"'+op+'" is undone by "'+opp+'"');}
+   tip='Opposite-operation tip: + and '+MINUS+' undo each other, and '+TIMES+' and '+DIV+' undo each other. Here, '+bits.join(', ')+'. Undo the steps backwards, last step first!';}
+  else tip='Opposite-operation tip: + and '+MINUS+' undo each other, and '+TIMES+' and '+DIV+' undo each other. When the mystery number is on both sides, do the same thing to BOTH sides to keep it balanced, like a seesaw!';
+  var shortExpl=truth?('Yes! With '+vn+' = '+p+', both sides equal '+lv+'.'):('Right! With '+vn+' = '+p+' the sides are '+lv+' and '+rv+', which don\u2019t match. '+vn+' should be '+s+'.');
+  return {level:level,kind:ent.kind,label:KIND_LABELS[ent.kind],vn:vn,p:p,s:s,truth:truth,eq:eqText,text:text,
+   plug:plug.lines,undo:undo,tip:tip,shortExpl:shortExpl,lv:lv,rv:rv};}
+ throw new Error('could not generate question at level '+level+' seed '+o.seed);}
+/* ---------- schedule & adaptive rules ---------- */
+function schedule(seed){var r=rngFromSeed('sched|'+seed);return shuffle(r,[true,true,true,true,true,false,false,false,false,false]);}
+function nextQuestionLevel(base,first,results){
+ var lo=first?1:Math.max(1,base-2),hi=first?10:Math.min(10,base+2);
+ var cur=first?1:Math.max(1,base-1),streak=0,need=first?2:3;
+ for(var i=0;i<results.length;i++){
+  if(results[i]){streak++;if(streak>=need){cur=Math.min(hi,cur+1);streak=0;}}
+  else{streak=0;cur=Math.max(lo,cur-1);}
+  if(!first&&i===1){var c=(results[0]?1:0)+(results[1]?1:0);if(c>=1&&cur<base)cur=base;streak=0;}}
+ return cur;}
+function nextDayLevel(base,score,first,endLevel){
+ if(first){if(score>=5){var n=Math.max(1,endLevel-1);return {level:n,change:'placement'};}return {level:1,change:'placement'};}
+ if(score>=9){return {level:Math.min(10,base+1),change:base>=10?'top':'up'};}
+ if(score<=4){return {level:Math.max(1,base-1),change:base<=1?'bottom':'down'};}
+ return {level:base,change:'same'};}
+function dateKey(d){d=d||new Date();var m=d.getMonth()+1,day=d.getDate();return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(day<10?'0':'')+day;}
+return {makeQuestion:makeQuestion,schedule:schedule,nextQuestionLevel:nextQuestionLevel,nextDayLevel:nextDayLevel,dateKey:dateKey,
+ KIND_LABELS:KIND_LABELS,LEVEL_NAMES:LEVEL_NAMES,POOLS:POOLS,rngFromSeed:rngFromSeed};
+})();
+if(typeof module!=='undefined')module.exports=QuizGen;
+
+</script>
+<script id="app-js">
+(function(){
+'use strict';
+var G=QuizGen,KEY='kyleMathQuiz.v1',TOTAL=10;
+var app=document.getElementById('app');
+var params=(function(){try{return new URLSearchParams(location.search);}catch(e){return {get:function(){return null;}};}})();
+function today(){var d=params.get('date');return /^\d{4}-\d{2}-\d{2}$/.test(d||'')?d:G.dateKey(new Date());}
+/* ---------- storage ---------- */
+var mem=null;
+function blank(){return {v:1,level:1,history:[],inProgress:null};}
+function load(){try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);if(o&&o.v===1&&o.history)return o;}}catch(e){}return mem||blank();}
+function save(){mem=store;try{localStorage.setItem(KEY,JSON.stringify(store));}catch(e){}}
+var store=load();
+function recFor(date){for(var i=0;i<store.history.length;i++)if(store.history[i].date===date)return store.history[i];return null;}
+function isFirst(){return store.history.length===0;}
+function prune(){var n=store.history.length;for(var i=0;i<n;i++){if(i<n-7&&store.history[i].questions)delete store.history[i].questions;}}
+/* ---------- helpers ---------- */
+function h(tag,attrs){var e=document.createElement(tag);
+ if(attrs)for(var k in attrs){var v=attrs[k];if(v==null||v===false)continue;if(k==='class')e.className=v;else if(k==='text')e.textContent=v;else if(k.indexOf('on')===0)e.addEventListener(k.slice(2),v);else e.setAttribute(k,v);}
+ function add(c){if(c==null||c===false)return;if(Array.isArray(c))c.forEach(add);else e.appendChild(typeof c==='object'?c:document.createTextNode(String(c)));}
+ for(var i=2;i<arguments.length;i++)add(arguments[i]);return e;}
+function btn(text,cls,fn,id){return h('button',{class:'btn '+cls,type:'button',onclick:fn,id:id||''},text);}
+function show(nodes){app.innerHTML='';nodes.forEach(function(n){app.appendChild(n);});window.scrollTo(0,0);}
+function lvName(l){return 'Level '+l+' \u2013 '+G.LEVEL_NAMES[l-1];}
+function stepsList(lines){return h('ol',{class:'steps'},lines.map(function(l){return h('li',null,l);}));}
+function missedFocus(){ /* weights from the last 3 days */
+ var miss={},hs=store.history.slice(-3);
+ hs.forEach(function(r,i){var w=(i===hs.length-1)?2:1;for(var k in (r.missed||{}))miss[k]=(miss[k]||0)+w*r.missed[k];});
+ return miss;}
+function focusText(miss){var ks=Object.keys(miss).filter(function(k){return miss[k]>0;}).sort(function(a,b){return miss[b]-miss[a];}).slice(0,2);
+ return ks.map(function(k){return G.KIND_LABELS[k];});}
+function dayStreak(){var d=today(),n=0,dates={};store.history.forEach(function(r){dates[r.date]=1;});
+ var cur=new Date(d+'T12:00:00');if(!dates[d])cur.setDate(cur.getDate()-1);
+ while(dates[G.dateKey(cur)]){n++;cur.setDate(cur.getDate()-1);}return n;}
+function parentCorner(){
+ var rows=store.history.slice().reverse().map(function(r){return h('tr',null,h('td',null,r.date),h('td',null,String(r.startLevel)),h('td',null,r.score+'/'+r.total),
+  h('td',null,Object.keys(r.missed||{}).map(function(k){return G.KIND_LABELS[k]+' ('+r.missed[k]+')';}).join(', ')||'\u2014'));});
+ var sel=h('select',{id:'lvlsel'},G.LEVEL_NAMES.map(function(n,i){var o=h('option',{value:String(i+1)},'Level '+(i+1)+' \u2013 '+n);if(i+1===store.level)o.selected=true;return o;}));
+ return h('details',{class:'parent'},h('summary',null,'\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC66 Parent corner'),
+  h('div',{class:'card'},
+   h('p',null,'Current level: '+lvName(store.level)+'. Days played: '+store.history.length+'.'),
+   rows.length?h('table',null,h('tr',null,h('th',null,'Date'),h('th',null,'Start lvl'),h('th',null,'Score'),h('th',null,'Missed')),rows):h('p',{class:'small'},'No quizzes yet.'),
+   h('p',{class:'small'},'How it works: 9\u201310 right \u2192 next day goes up a level. 7\u20138 \u2192 stay. 5\u20136 \u2192 stay and practice the missed question types. 4 or fewer \u2192 down one level. Inside a quiz, 3 right in a row makes questions harder and a miss makes the next one easier. Progress is saved only in this browser on this device.'),
+   h('p',null,'Change the starting level for the next quiz:'),sel,
+   btn('Save level','blue',function(){store.level=parseInt(document.getElementById('lvlsel').value,10);save();render();}),
+   btn('Reset all progress','gray',function(){if(confirm('Erase ALL saved progress on this device and start over?')){store=blank();save();render();}})));}
+/* ---------- quiz engine ---------- */
+var Q=null;
+function recentTexts(){var out=[];store.history.slice(-3).forEach(function(r){(r.texts||[]).forEach(function(t){out.push(t);});});return out;}
+function levelsSoFar(){return Q.answers.map(function(a,i){return a===Q.qs[i].truth;});}
+function ensureQuestion(){
+ if(Q.qs[Q.idx])return;
+ if(Q.mode==='retry')return;
+ var level=G.nextQuestionLevel(Q.base,Q.first,levelsSoFar().slice(0,Q.idx));
+ var seed=Q.mode==='daily'?(Q.date+'|L'+level+'|q'+Q.idx):('practice|'+Q.nonce+'|L'+level+'|q'+Q.idx);
+ var avoid=Q.qs.map(function(q){return q.text;}).concat(recentTexts());
+ Q.qs[Q.idx]=G.makeQuestion({seed:seed,level:level,wantTrue:Q.sched[Q.idx],miss:Q.miss,avoid:avoid});}
+function persist(){if(Q.mode!=='daily')return;
+ store.inProgress={date:Q.date,base:Q.base,first:Q.first,sched:Q.sched,qs:Q.qs,answers:Q.answers,streak:Q.streak,best:Q.best};save();}
+function startQuiz(mode,fixedQs){
+ var date=today();
+ Q={mode:mode,date:date,base:store.level,first:mode==='daily'&&isFirst(),sched:G.schedule(date+'|'+store.level+'|'+mode+(mode==='practice'?Date.now():'')),
+  qs:fixedQs?fixedQs.map(function(q){return q;}):[],answers:[],idx:0,streak:0,best:0,nonce:String(Date.now()),miss:missedFocus()};
+ if(mode==='practice')Q.first=false;
+ renderQuestion();}
+function resumeDaily(){var ip=store.inProgress;
+ Q={mode:'daily',date:ip.date,base:ip.base,first:ip.first,sched:ip.sched,qs:ip.qs,answers:ip.answers,idx:ip.answers.length,streak:ip.streak,best:ip.best,nonce:'',miss:missedFocus()};
+ Q.qs=Q.qs.slice(0,Q.answers.length);
+ if(Q.idx>=TOTAL)finishQuiz();else renderQuestion();}
+function renderQuestion(){
+ ensureQuestion();var q=Q.qs[Q.idx];var answered=Q.answers[Q.idx]!==undefined;
+ var title={daily:'Daily Quiz',practice:'Practice time',retry:'Try again'}[Q.mode];
+ var nodes=[h('h1',null,title),
+  h('div',{class:'card pop'},
+   h('div',{class:'top'},h('span',{class:'pill'},'Question '+(Q.idx+1)+' of '+TOTAL),h('span',{class:'pill',id:'streak'},'\uD83D\uDD25 Streak: '+Q.streak),h('span',{class:'pill'},'Level '+q.level)),
+   h('div',{class:'progress',role:'progressbar','aria-valuemin':'0','aria-valuemax':String(TOTAL),'aria-valuenow':String(Q.idx+(answered?1:0))},h('i',{style:'width:'+((Q.idx+(answered?1:0))/TOTAL*100)+'%'})),
+   h('div',{class:'if'},'If '+q.vn+' = '+q.p+', is this true?'),
+   h('div',{class:'eq',id:'eq'},q.eq),
+   h('div',{class:'ask'},'True or False?'),
+   h('div',{class:'tf'},
+    h('button',{class:'btn t',type:'button',id:'btnT',disabled:answered?'disabled':null,onclick:function(){answer(true);}},'\u2714 True'),
+    h('button',{class:'btn f',type:'button',id:'btnF',disabled:answered?'disabled':null,onclick:function(){answer(false);}},'\u2718 False')),
+   h('div',{id:'fb'}))];
+ show(nodes);
+ if(Q.mode!=='daily')nodes[1].appendChild(h('p',{class:'small'},Q.mode==='practice'?'Practice questions don\u2019t change your daily record.':'Retrying doesn\u2019t change your daily record.'));
+ if(answered)renderFeedback();}
+function answer(val){
+ if(Q.answers[Q.idx]!==undefined)return;var q=Q.qs[Q.idx];Q.answers[Q.idx]=val;var ok=(val===q.truth);
+ if(ok){Q.streak++;if(Q.streak>Q.best)Q.best=Q.streak;}else Q.streak=0;
+ persist();document.getElementById('btnT').disabled=true;document.getElementById('btnF').disabled=true;
+ var st=document.getElementById('streak');st.textContent='\uD83D\uDD25 Streak: '+Q.streak;
+ var bar=document.querySelector('.progress i');bar.style.width=((Q.idx+1)/TOTAL*100)+'%';
+ renderFeedback();}
+var CHEERS=['Awesome!','Nice one!','You got it!','Brilliant!','Super!','Way to go!','Yes!','Math star!'];
+function renderFeedback(){var q=Q.qs[Q.idx],val=Q.answers[Q.idx],ok=(val===q.truth),box=document.getElementById('fb');box.innerHTML='';
+ var last=(Q.idx>=TOTAL-1);
+ var next=btn(last?'See my results \uD83C\uDF89':'Next question \u27A1','go',function(){if(last)finishQuiz();else{Q.idx++;renderQuestion();}},'next');
+ var fb;
+ if(ok){var extra=Q.streak>=5?' \uD83D\uDD25 '+Q.streak+' in a row!':Q.streak===3?' \uD83D\uDD25 3 in a row!':'';
+  fb=h('div',{class:'fb good pop',id:'good'},h('h3',null,'\u2705 '+CHEERS[(Q.idx*3+q.level)%CHEERS.length]+' Correct!'+extra),h('p',null,q.shortExpl));}
+ else{
+  var said=val?'True':'False',really=q.truth?'True':'False';
+  fb=h('div',{class:'fb try pop',id:'wrong'},
+   h('h3',null,'\uD83D\uDCAA Great try! Let\u2019s figure it out together.'),
+   h('p',null,'You tapped '+said+', but the answer is '+really+'. Here\u2019s why:'),
+   h('h3',null,'\uD83D\uDD0C Step 1: Plug it in'),
+   h('p',{class:'small'},'Swap the letter for the number, then do the math on each side.'),stepsList(q.plug),
+   h('h3',null,'\uD83D\uDD0D Step 2: What should '+q.vn+' really be?'),
+   h('p',{class:'small'},'Undo the steps backwards using opposite operations.'),stepsList(q.undo),
+   h('div',{class:'tip'},'\uD83D\uDCA1 '+q.tip),
+   h('p',null,'Mistakes are how brains grow. You\u2019ve got this! \uD83C\uDF31'));}
+ box.appendChild(fb);box.appendChild(next);
+ setTimeout(function(){try{box.scrollIntoView({behavior:'smooth',block:'nearest'});}catch(e){}},50);}
+/* ---------- finishing ---------- */
+function finishQuiz(){
+ var results=levelsSoFar(),score=results.filter(Boolean).length,missed={};
+ Q.qs.forEach(function(q,i){if(!results[i])missed[q.kind]=(missed[q.kind]||0)+1;});
+ if(Q.mode==='daily'){
+  var endLevel=G.nextQuestionLevel(Q.base,Q.first,results);
+  var nd=G.nextDayLevel(Q.base,score,Q.first,endLevel);
+  var rec={date:Q.date,startLevel:Q.base,first:Q.first,score:score,total:TOTAL,missed:missed,levelAfter:nd.level,change:nd.change,best:Q.best,
+   texts:Q.qs.map(function(q){return q.text;}),questions:Q.qs.map(function(q,i){var c={};for(var k in q)c[k]=q[k];c.userAnswer=Q.answers[i];return c;})};
+  store.history.push(rec);store.level=nd.level;store.inProgress=null;prune();save();
+  renderResults(rec,'daily');}
+ else{renderResults({date:Q.date,startLevel:Q.base,score:score,total:TOTAL,missed:missed,best:Q.best,
+   questions:Q.qs.map(function(q,i){var c={};for(var k in q)c[k]=q[k];c.userAnswer=Q.answers[i];return c;})},Q.mode);}}
+function levelMsg(rec){var n=rec.levelAfter;
+ if(rec.change==='placement')return '\uD83C\uDFAF That was your first quiz, so it started easy and climbed. Tomorrow we\u2019ll start at '+lvName(n)+'.';
+ if(rec.change==='up')return '\uD83C\uDF89 LEVEL UP! Tomorrow you start '+lvName(n)+'. Great job!';
+ if(rec.change==='top')return '\uD83C\uDFC6 You\u2019re at the top level \u2013 Math Wizard! Tomorrow: more Level 10 challenges.';
+ if(rec.change==='down')return '\uD83C\uDF31 Tomorrow we\u2019ll step back to '+lvName(n)+' to make your skills rock-solid. Even math pros review!';
+ if(rec.change==='bottom')return '\uD83C\uDF31 Tomorrow we\u2019ll practice Level 1 again so it feels super easy. You\u2019re doing great!';
+ var f=focusText(rec.missed);return '\uD83D\uDC4D You\u2019ll stay at '+lvName(n)+' tomorrow.'+(f.length?' We\u2019ll practice '+f.join(' and ')+' a bit more.':' Keep it up!');}
+function scoreMsg(s){return s===10?'PERFECT! \uD83E\uDD29':s>=9?'Amazing! \uD83C\uDF1F':s>=7?'Great job! \uD83D\uDE0A':s>=5?'Nice work! Keep going! \uD83D\uDCAA':'Good effort! Every try makes you stronger! \uD83C\uDF31';}
+function reviewList(rec){return (rec.questions||[]).map(function(q,i){var ok=q.userAnswer===q.truth;
+ var d=h('details',{class:'rev '+(ok?'ok':'no')},h('summary',null,(ok?'\u2705 ':'\uD83D\uDFE0 ')+(i+1)+'. If '+q.vn+' = '+q.p+':  '+q.eq+'  \u2192 '+(q.truth?'True':'False')),
+  h('div',{class:'inner'},h('p',null,'You said '+(q.userAnswer?'True':'False')+'. '+q.shortExpl),
+   ok?null:[h('h3',null,'Plug it in'),stepsList(q.plug),h('h3',null,'What should '+q.vn+' be?'),stepsList(q.undo),h('div',{class:'tip'},'\uD83D\uDCA1 '+q.tip)]));return d;});}
+function renderResults(rec,mode){
+ var stars=rec.score>=9?'\u2B50\u2B50\u2B50':rec.score>=7?'\u2B50\u2B50':rec.score>=5?'\u2B50':'\uD83C\uDF31';
+ var nodes=[h('h1',null,mode==='daily'?'Quiz complete!':mode==='practice'?'Practice done!':'Retry done!'),
+  h('div',{class:'card pop'},h('div',{class:'big'},rec.score+' / '+rec.total),h('div',{class:'stars'},stars),h('h2',{style:'text-align:center'},scoreMsg(rec.score)),
+   rec.best?h('p',{style:'text-align:center'},'\uD83D\uDD25 Best streak: '+rec.best):null,
+   mode==='daily'?h('div',{class:'msg',id:'levelmsg'},levelMsg(rec)):h('div',{class:'msg'},'This was just for fun \u2013 your daily record didn\u2019t change.'),
+   (mode==='daily'&&Object.keys(rec.missed).length)?h('p',null,'Types to keep practicing: '+Object.keys(rec.missed).map(function(k){return G.KIND_LABELS[k];}).join(', ')+'.'):null,
+   mode==='daily'?h('div',{class:'tip'},'\uD83D\uDCC5 Come back tomorrow for a brand-new set of 10 questions!'):null),
+  h('div',{class:'card'},h('h2',null,'\uD83D\uDCCB Review today\u2019s questions'),h('p',{class:'small'},'Tap a question to see how it works.'),reviewList(rec),
+   (mode==='daily'||mode==='retry')&&todayRec()?btn('\uD83D\uDD01 Try today\u2019s questions again','blue',function(){var r=todayRec();if(r&&r.questions){startQuiz('retry',r.questions.map(function(q){var c={};for(var k in q)c[k]=q[k];delete c.userAnswer;return c;}));}}):null,
+   btn('\uD83D\uDCAA Practice more','alt',function(){startQuiz('practice');}),
+   mode!=='daily'?btn('\u2B05 Back to home','gray',render):null),
+  parentCorner()];
+ show(nodes);}
+function todayRec(){var r=recFor(today());return r&&r.questions?r:null;}
+/* ---------- home ---------- */
+function render(){
+ Q=null;store=load();var rec=recFor(today());
+ if(rec){renderResults(rec,'daily');return;}
+ var ip=store.inProgress;
+ if(ip&&ip.date===today()&&ip.answers&&ip.answers.length>0){
+  show([h('h1',null,'Daily Math Quiz'),h('div',{class:'card pop'},h('h2',null,'Welcome back! \uD83D\uDC4B'),h('p',null,'You\u2019re on question '+(ip.answers.length+1)+' of '+TOTAL+'.'),
+   btn('Keep going \u25B6','go',resumeDaily,'resume')),parentCorner()]);return;}
+ var first=isFirst(),f=focusText(missedFocus()),ds=dayStreak();
+ show([h('h1',null,'\uD83E\uDDE0 Daily Math Quiz'),h('div',{class:'sub'},'True or False? Is the mystery number right?'),
+  h('div',{class:'card pop'},
+   h('div',{class:'row'},h('span',{class:'badge'},first?'Level 1 to start':lvName(store.level)),ds?h('span',{class:'badge'},'\uD83D\uDD25 '+ds+' day streak'):null),
+   h('h2',null,first?'Hi, math star! \uD83D\uDC4B':'Ready for today\u2019s 10?'),
+   h('p',null,first?'Each question gives you a number for a letter. Is the equation true or false when you use that number? We start easy and the questions get harder as you do well!':'10 new questions are waiting. They start a little easier and get harder as you get them right.'),
+   (!first&&f.length)?h('p',{class:'small'},'\uD83C\uDFAF Extra practice today on: '+f.join(', ')):null,
+   h('div',{class:'tip'},'Example: If M = 49, is M \u00F7 7 = 7 true? Plug it in: 49 \u00F7 7 = 7. Yes, TRUE!'),
+   btn('Start today\u2019s quiz \u25B6','go',function(){startQuiz('daily');},'start')),
+  parentCorner()]);}
+document.addEventListener('visibilitychange',function(){if(!document.hidden&&!Q){render();}});
+render();
+window.__quiz={store:function(){return store;},render:render};
+})();
+</script>
+</body>
+</html>
