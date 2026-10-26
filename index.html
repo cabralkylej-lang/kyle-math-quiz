@@ -72,6 +72,17 @@ select{font:inherit;font-size:18px;padding:10px;border-radius:12px;border:2px so
 .pop{animation:pop .35s}
 @keyframes pop{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
 @media (prefers-reduced-motion:reduce){.pop{animation:none}.progress i{transition:none}}
+.sync{position:fixed;right:10px;bottom:10px;z-index:9;border:0;border-radius:99px;padding:8px 14px;font:inherit;font-size:14px;font-weight:800;box-shadow:0 3px 10px rgba(0,0,0,.25);background:#fff;color:#2d2a4a;max-width:80vw}
+.sync.saved{background:#e6fff6;color:#007a5e}.sync.saving{background:#f1f2ff;color:#4834d4}.sync.offline,.sync.error{background:#fff3cd;color:#8a5a00}.sync.auth{background:#ffe3e3;color:#a61e1e;cursor:pointer}
+.btn.kid{font-size:30px;min-height:96px;margin:14px 0}.btn.k1{background:#e84393}.btn.k2{background:#0984e3}
+.dots{display:flex;justify-content:center;gap:16px;margin:14px 0 8px}
+.dots i{width:26px;height:26px;border-radius:50%;border:4px solid #a29bfe;background:#fff}.dots i.on{background:#6c5ce7}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:320px;margin:10px auto}
+.key{font:inherit;font-size:32px;font-weight:900;min-height:70px;border:0;border-radius:20px;background:#f1f2ff;color:#2d2a4a;box-shadow:0 5px 0 rgba(108,92,231,.25);cursor:pointer}
+.key:active{transform:translateY(4px);box-shadow:0 1px 0 rgba(108,92,231,.25)}
+.weak{border:3px solid #ffe3e3;border-radius:18px;padding:10px 12px;margin:10px 0}
+.weak .l1{display:flex;justify-content:space-between;gap:8px;font-weight:900;font-size:19px}.weak .progress{height:12px;margin:8px 0 4px}
+.legend{text-align:center;margin:0 0 6px}
 </style>
 </head>
 <body>
@@ -364,12 +375,16 @@ if(typeof module!=='undefined')module.exports=QuizGen;
 <script id="app-js">
 (function(){
 'use strict';
-var G=QuizGen,KEY='kyleMathQuiz.v1',TOTAL=10;
+var G=QuizGen,TOTAL=10;
+var API='https://lfbauhcrqfwrwlvlyysf.supabase.co/functions/v1/kid-sync';
+var KIDS=['Lillian','Christian'],LEGACY='kyleMathQuiz.v1',CACHE='kyleMathQuiz.v2.',SS='kyleMathQuiz.session';
 var app=document.getElementById('app');
-var params=(function(){try{return new URLSearchParams(location.search);}catch(e){return {get:function(){return null;}};}})();
-function today(){var d=params.get('date');return /^\d{4}-\d{2}-\d{2}$/.test(d||'')?d:G.dateKey(new Date());}
-/* ---------- storage ---------- */
-var mem=null;
+/* ---------- clock (server time, New York date) ---------- */
+var skew=0;
+function nyKey(ms){try{var p=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(ms));if(/^\d{4}-\d{2}-\d{2}$/.test(p))return p;}catch(e){}return G.dateKey(new Date(ms));}
+function today(){return nyKey(Date.now()+skew);}
+/* ---------- storage: the server is the source of truth; localStorage is a per-kid offline cache ---------- */
+var kid=null,token=null,pending=[],memCache={};
 var SCHEMA=2;
 function blank(){return {v:SCHEMA,level:1,history:[],inProgress:null};}
 function pct(r){return r.total?Math.round(100*r.score/r.total):0;}
@@ -389,42 +404,89 @@ var qcache={};
 function questionsOf(r){ /* full question list for a past day, or null if none was saved */
  if(!r||!r.qz)return null;if(qcache[r.date+r.qz.length])return qcache[r.date+r.qz.length];
  try{var qs=G.unpackQuestions(r.qz);if(qs.length){qcache[r.date+r.qz.length]=qs;return qs;}}catch(e){}return null;}
-function load(){try{var raw=localStorage.getItem(KEY);if(raw){var o=normalize(JSON.parse(raw));if(o)return o;}}catch(e){}return mem||blank();}
-function save(){mem=store;try{localStorage.setItem(KEY,JSON.stringify(store));}catch(e){}}
-var store=load();
+function lsGet(k){try{return localStorage.getItem(k);}catch(e){return memCache[k]||null;}}
+function lsSet(k,v){memCache[k]=v;try{localStorage.setItem(k,v);}catch(e){}}
+function lsDel(k){delete memCache[k];try{localStorage.removeItem(k);}catch(e){}}
+var store=blank();
+function save(){if(!kid)return;lsSet(CACHE+kid,JSON.stringify({store:store,pending:pending}));}
+function cacheLoad(){store=blank();pending=[];
+ try{var o=JSON.parse(lsGet(CACHE+kid)||'null');if(o){var s=normalize(o.store);if(s)store=s;if(Array.isArray(o.pending))pending=o.pending;}}catch(e){}}
 function recFor(date){for(var i=0;i<store.history.length;i++)if(store.history[i].date===date)return store.history[i];return null;}
 function isFirst(){return store.history.length===0;}
-function prune(){var n=store.history.length;for(var i=0;i<n-3;i++){delete store.history[i].texts;}} /* all past questions are kept (compressed); only the repeat-avoid texts are trimmed */
+function prune(){var n=store.history.length;for(var i=0;i<n-3;i++){delete store.history[i].texts;}}
+/* ---------- server api ---------- */
+function api(body){
+ return new Promise(function(res){var done=false;
+  function fin(o){if(done)return;done=true;clearTimeout(t);res(o);}
+  var t=setTimeout(function(){fin({net:true});},15000);
+  try{fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){
+    return r.json().catch(function(){return {};}).then(function(j){
+     if(j&&typeof j.now==='number')skew=j.now-Date.now();
+     if(r.status>=500)fin({net:true});else fin({s:r.status,j:j||{}});});
+   }).catch(function(){fin({net:true});});}catch(e){fin({net:true});}});}
+/* ---------- sync queue + "saved" indicator ---------- */
+var syncEl=null,flushing=false,flushTimer=null,retryTimer=null,syncState='';
+function setSync(st){syncState=st;
+ if(!syncEl){syncEl=document.createElement('button');syncEl.id='sync';syncEl.type='button';document.body.appendChild(syncEl);
+  syncEl.addEventListener('click',function(){if(syncState==='auth'&&kid)renderPin(kid,'Please type your PIN again so your work can be saved.');else if(syncState==='offline'||syncState==='error')flush();});}
+ var m={saving:'Saving\u2026',saved:'Saved \u2713',offline:'\u26A0 Offline \u2013 will save when you\u2019re back online',auth:'\uD83D\uDD12 Tap to sign in again to save',error:'\u26A0 Couldn\u2019t save \u2013 tap to retry'}[st];
+ if(!kid||!m){syncEl.style.display='none';return;}
+ syncEl.style.display='block';syncEl.className='sync '+st;syncEl.textContent=m;}
+function enqueue(p,delay){
+ var last=pending[pending.length-1],prog=!p.rec;
+ if(p.rec){while(pending.length&&!pending[pending.length-1].rec&&!pending[pending.length-1].importHistory)pending.pop();pending.push(p);}
+ else if(last&&!last.rec&&!last.importHistory){for(var k in p)last[k]=p[k];}
+ else pending.push(p);
+ save();setSync('saving');
+ clearTimeout(flushTimer);flushTimer=setTimeout(flush,prog?(delay==null?1200:delay):0);}
+function flush(){
+ clearTimeout(flushTimer);clearTimeout(retryTimer);
+ if(flushing||!kid)return Promise.resolve();
+ if(!token){if(pending.length)setSync('auth');return Promise.resolve();}
+ if(!pending.length){setSync('saved');return Promise.resolve();}
+ flushing=true;setSync('saving');var hadErr=false;
+ function step(){
+  if(!pending.length){flushing=false;setSync(hadErr?'error':'saved');return Promise.resolve();}
+  var body={};for(var k in pending[0])body[k]=pending[0][k];body.action='save';body.token=token;
+  return api(body).then(function(r){
+   if(r.net){flushing=false;setSync('offline');retryTimer=setTimeout(flush,15000);return;}
+   if(r.s===401){token=null;try{sessionStorage.removeItem(SS);}catch(e){}flushing=false;setSync('auth');return;}
+   var item=pending.shift();save();
+   if(r.s===200){if(r.j.duplicate&&item.rec)lostRace=true;}else hadErr=true; /* a rejected item is dropped so the queue never jams */
+   return step();});}
+ return step();}
+var lostRace=false;
 /* ---------- helpers ---------- */
+var keyHandler=null,nextKH=null;
+document.addEventListener('keydown',function(e){if(keyHandler)keyHandler(e);});
 function h(tag,attrs){var e=document.createElement(tag);
  if(attrs)for(var k in attrs){var v=attrs[k];if(v==null||v===false)continue;if(k==='class')e.className=v;else if(k==='text')e.textContent=v;else if(k.indexOf('on')===0)e.addEventListener(k.slice(2),v);else e.setAttribute(k,v);}
  function add(c){if(c==null||c===false)return;if(Array.isArray(c))c.forEach(add);else e.appendChild(typeof c==='object'?c:document.createTextNode(String(c)));}
  for(var i=2;i<arguments.length;i++)add(arguments[i]);return e;}
 function btn(text,cls,fn,id){return h('button',{class:'btn '+cls,type:'button',onclick:fn,id:id||''},text);}
-function show(nodes){app.innerHTML='';nodes.forEach(function(n){app.appendChild(n);});window.scrollTo(0,0);}
+function show(nodes){keyHandler=nextKH;nextKH=null;app.innerHTML='';nodes.forEach(function(n){app.appendChild(n);});window.scrollTo(0,0);setSync(syncState);}
 function lvName(l){return 'Level '+l+' \u2013 '+G.LEVEL_NAMES[l-1];}
 function stepsList(lines){return h('ol',{class:'steps'},lines.map(function(l){return h('li',null,l);}));}
-function missedFocus(){ /* weights from the last 3 days */
- var miss={},hs=store.history.slice(-3);
- hs.forEach(function(r,i){var w=(i===hs.length-1)?2:1;for(var k in (r.missed||{}))miss[k]=(miss[k]||0)+w*r.missed[k];});
- return miss;}
+function missedFocus(){var miss={},hs=store.history.slice(-3);
+ hs.forEach(function(r,i){var w=(i===hs.length-1)?2:1;for(var k in (r.missed||{}))miss[k]=(miss[k]||0)+w*r.missed[k];});return miss;}
 function focusText(miss){var ks=Object.keys(miss).filter(function(k){return miss[k]>0;}).sort(function(a,b){return miss[b]-miss[a];}).slice(0,2);
  return ks.map(function(k){return G.KIND_LABELS[k];});}
 function dayStreak(){var d=today(),n=0,dates={};store.history.forEach(function(r){dates[r.date]=1;});
  var cur=new Date(d+'T12:00:00');if(!dates[d])cur.setDate(cur.getDate()-1);
  while(dates[G.dateKey(cur)]){n++;cur.setDate(cur.getDate()-1);}return n;}
+function logoutBtn(){return btn('\uD83D\uDD04 Switch kid / log out','gray',logout,'logout');}
 function parentCorner(){
  var rows=store.history.slice().reverse().map(function(r){return h('tr',null,h('td',null,r.date),h('td',null,String(r.startLevel)),h('td',null,r.score+'/'+r.total),h('td',null,pct(r)+'%'),
   h('td',null,Object.keys(r.missed||{}).map(function(k){return G.KIND_LABELS[k]+' ('+r.missed[k]+')';}).join(', ')||'\u2014'));});
  var sel=h('select',{id:'lvlsel'},G.LEVEL_NAMES.map(function(n,i){var o=h('option',{value:String(i+1)},'Level '+(i+1)+' \u2013 '+n);if(i+1===store.level)o.selected=true;return o;}));
  return h('details',{class:'parent'},h('summary',null,'\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC66 Parent corner'),
   h('div',{class:'card'},
-   h('p',null,'Current level: '+lvName(store.level)+'. Days played: '+store.history.length+(store.history.length?'. Average: '+avgPct()+'%.':'.')),
+   h('p',null,(kid?kid+': ':'')+'current level: '+lvName(store.level)+'. Days played: '+store.history.length+(store.history.length?'. Average: '+avgPct()+'%.':'.')),
    rows.length?h('table',null,h('tr',null,h('th',null,'Date'),h('th',null,'Start lvl'),h('th',null,'Score'),h('th',null,'%'),h('th',null,'Missed')),rows):h('p',{class:'small'},'No quizzes yet.'),
-   h('p',{class:'small'},'How it works: 9\u201310 right \u2192 next day goes up a level. 7\u20138 \u2192 stay. 5\u20136 \u2192 stay and practice the missed question types. 4 or fewer \u2192 down one level. Inside a quiz, 3 right in a row makes questions harder and a miss makes the next one easier. Progress is saved only in this browser on this device.'),
+   h('p',{class:'small'},'How it works: 9\u201310 right \u2192 next day goes up a level. 7\u20138 \u2192 stay. 5\u20136 \u2192 stay and practice the missed question types. 4 or fewer \u2192 down one level. Inside a quiz, 3 right in a row makes questions harder and a miss makes the next one easier. Each day\u2019s score is final and saved to the cloud under '+(kid||'the kid')+'\u2019s name.'),
    h('p',null,'Change the starting level for the next quiz:'),sel,
-   btn('Save level','blue',function(){store.level=parseInt(document.getElementById('lvlsel').value,10);save();render();}),
-   btn('Reset all progress','gray',function(){if(confirm('Erase ALL saved progress on this device and start over?')){store=blank();save();render();}})));}
+   btn('Save level','blue',function(){store.level=parseInt(document.getElementById('lvlsel').value,10);save();enqueue({level:store.level},0);render();}),
+   h('p',{class:'small',id:'pinnote'},'Parent: to reset a forgotten PIN, ask Kyle\u2019s assistant.')));}
 /* ---------- quiz engine ---------- */
 var Q=null;
 function recentTexts(){var out=[];store.history.slice(-3).forEach(function(r){(r.texts||[]).forEach(function(t){out.push(t);});});return out;}
@@ -437,9 +499,10 @@ function ensureQuestion(){
  var avoid=Q.qs.map(function(q){return q.text;}).concat(recentTexts());
  Q.qs[Q.idx]=G.makeQuestion({seed:seed,level:level,wantTrue:Q.sched[Q.idx],miss:Q.miss,avoid:avoid});}
 function persist(){if(Q.mode!=='daily')return;
- store.inProgress={date:Q.date,base:Q.base,first:Q.first,sched:Q.sched,qs:Q.qs,answers:Q.answers,streak:Q.streak,best:Q.best};save();}
+ store.inProgress={date:Q.date,base:Q.base,first:Q.first,sched:Q.sched,qs:Q.qs,answers:Q.answers,streak:Q.streak,best:Q.best};save();enqueue({inProgress:store.inProgress});}
 function startQuiz(mode,fixedQs){
  var date=today();
+ if(mode==='daily'&&recFor(date)){render();return;} /* today's score is final */
  Q={mode:mode,date:date,base:store.level,first:mode==='daily'&&isFirst(),sched:G.schedule(date+'|'+store.level+'|'+mode+(mode==='practice'?Date.now():'')),
   qs:fixedQs?fixedQs.map(function(q){return q;}):[],answers:[],idx:0,streak:0,best:0,nonce:String(Date.now()),miss:missedFocus()};
  if(mode==='practice')Q.first=false;
@@ -448,9 +511,16 @@ function resumeDaily(){var ip=store.inProgress;
  Q={mode:'daily',date:ip.date,base:ip.base,first:ip.first,sched:ip.sched,qs:ip.qs,answers:ip.answers,idx:ip.answers.length,streak:ip.streak,best:ip.best,nonce:'',miss:missedFocus()};
  Q.qs=Q.qs.slice(0,Q.answers.length);
  if(Q.idx>=TOTAL)finishQuiz();else renderQuestion();}
+function renderReminder(){
+ Q=null;
+ show([h('h1',null,'\u270B Before you start'),
+  h('div',{class:'card pop'},h('h2',{style:'text-align:center'},'Ready, '+(kid||'math star')+'?'),
+   h('div',{class:'msg',id:'reminder'},'Take your time, think carefully. Your final score is final: once you answer, you can\u2019t change it. No cheating, do your own best work!'),
+   btn('I\u2019m ready','go',function(){startQuiz('daily');},'ready'),
+   btn('\u2B05 Back','gray',render,'reminderback'))]);}
 function renderQuestion(){
  ensureQuestion();var q=Q.qs[Q.idx];var answered=Q.answers[Q.idx]!==undefined;
- var title={daily:'Daily Quiz',practice:'Practice time',retry:'Try again'}[Q.mode];
+ var title={daily:'Daily Quiz',practice:'Practice time',retry:'Practice again'}[Q.mode];
  var nodes=[h('h1',null,title),
   h('div',{class:'card pop'},
    h('div',{class:'top'},h('span',{class:'pill'},'Question '+(Q.idx+1)+' of '+TOTAL),h('span',{class:'pill',id:'streak'},'\uD83D\uDD25 Streak: '+Q.streak),h('span',{class:'pill'},'Level '+q.level)),
@@ -463,7 +533,7 @@ function renderQuestion(){
     h('button',{class:'btn f',type:'button',id:'btnF',disabled:answered?'disabled':null,onclick:function(){answer(false);}},'\u2718 False')),
    h('div',{id:'fb'}))];
  show(nodes);
- if(Q.mode!=='daily')nodes[1].appendChild(h('p',{class:'small'},Q.mode==='practice'?'Practice questions don\u2019t change your daily record.':'Retrying doesn\u2019t change your daily record.'));
+ if(Q.mode!=='daily')nodes[1].appendChild(h('p',{class:'small'},Q.mode==='practice'?'Practice questions don\u2019t change your daily record.':'This is just practice \u2013 it doesn\u2019t change your saved score.'));
  if(answered)renderFeedback();}
 function answer(val){
  if(Q.answers[Q.idx]!==undefined)return;var q=Q.qs[Q.idx];Q.answers[Q.idx]=val;var ok=(val===q.truth);
@@ -501,8 +571,11 @@ function finishQuiz(){
   var nd=G.nextDayLevel(Q.base,score,Q.first,endLevel);
   var rec={date:Q.date,startLevel:Q.base,first:Q.first,score:score,total:TOTAL,missed:missed,levelAfter:nd.level,change:nd.change,best:Q.best,
    texts:Q.qs.map(function(q){return q.text;}),qz:G.packQuestions(Q.qs.map(function(q,i){var c={};for(var k in q)c[k]=q[k];c.userAnswer=Q.answers[i];return c;}))};
-  store.history.push(rec);store.level=nd.level;store.inProgress=null;prune();save();
-  renderResults(rec,'daily');}
+  var resQ=Q.qs.map(function(q,i){return {kind:q.kind,level:q.level,text:q.text,truth:q.truth,answer:Q.answers[i]};});
+  if(!recFor(Q.date)){store.history.push(rec);store.level=nd.level;store.inProgress=null;prune();save();
+   enqueue({rec:rec,result:{questions:resQ},level:nd.level});
+   flush().then(function(){if(lostRace){lostRace=false;resync(true);}});}
+  renderResults(recFor(Q.date)||rec,'daily');}
  else{renderResults({date:Q.date,startLevel:Q.base,score:score,total:TOTAL,missed:missed,best:Q.best,
    questions:Q.qs.map(function(q,i){var c={};for(var k in q)c[k]=q[k];c.userAnswer=Q.answers[i];return c;})},Q.mode);}}
 function levelMsg(rec){var n=rec.levelAfter;
@@ -519,23 +592,24 @@ function reviewList(rec){return (rec.questions||questionsOf(rec)||[]).map(functi
    ok?null:[h('h3',null,'Plug it in'),stepsList(q.plug),h('h3',null,'What should '+q.vn+' be?'),stepsList(q.undo),h('div',{class:'tip'},'\uD83D\uDCA1 '+q.tip)]));return d;});}
 function renderResults(rec,mode){
  var stars=rec.score>=9?'\u2B50\u2B50\u2B50':rec.score>=7?'\u2B50\u2B50':rec.score>=5?'\u2B50':'\uD83C\uDF31';
- var nodes=[h('h1',null,mode==='daily'?'Quiz complete!':mode==='practice'?'Practice done!':'Retry done!'),
+ var nodes=[h('h1',null,mode==='daily'?'Quiz complete!':mode==='practice'?'Practice done!':'Practice done!'),
   h('div',{class:'card pop'},h('div',{class:'big'},rec.score+' / '+rec.total),h('div',{style:'text-align:center;font-size:30px;font-weight:900;color:#00b894'},pct(rec)+'%'),h('div',{class:'stars'},stars),h('h2',{style:'text-align:center'},scoreMsg(rec.score)),
    rec.best?h('p',{style:'text-align:center'},'\uD83D\uDD25 Best streak: '+rec.best):null,
-   mode==='daily'?h('div',{class:'msg',id:'levelmsg'},levelMsg(rec)):h('div',{class:'msg'},'This was just for fun \u2013 your daily record didn\u2019t change.'),
+   mode==='daily'?h('div',{class:'msg',id:'levelmsg'},levelMsg(rec)):h('div',{class:'msg'},'This was just for fun \u2013 your saved daily score didn\u2019t change.'),
    (mode==='daily'&&Object.keys(rec.missed).length)?h('p',null,'Types to keep practicing: '+Object.keys(rec.missed).map(function(k){return G.KIND_LABELS[k];}).join(', ')+'.'):null,
-   mode==='daily'?h('div',{class:'tip'},'\uD83D\uDCC5 Come back tomorrow for a brand-new set of 10 questions!'):null),
+   mode==='daily'?h('div',{class:'tip'},'\uD83D\uDCC5 Today\u2019s score is saved and final. Come back tomorrow for a brand-new set of 10 questions!'):null),
   h('div',{class:'card'},h('h2',null,'\uD83D\uDCCB Review today\u2019s questions'),h('p',{class:'small'},'Tap a question to see how it works.'),reviewList(rec),
-   (mode==='daily'||mode==='retry')&&todayRec()?btn('\uD83D\uDD01 Try today\u2019s questions again','blue',function(){var r=todayRec(),qs=r&&questionsOf(r);if(qs){startQuiz('retry',qs.map(function(q){var c={};for(var k in q)c[k]=q[k];delete c.userAnswer;return c;}));}}):null,
+   (mode==='daily'||mode==='retry')&&todayRec()?btn('\uD83D\uDD01 Practice today\u2019s questions again (score stays the same)','blue',function(){var r=todayRec(),qs=r&&questionsOf(r);if(qs){startQuiz('retry',qs.map(function(q){var c={};for(var k in q)c[k]=q[k];delete c.userAnswer;return c;}));}}):null,
    btn('\uD83D\uDCAA Practice more','alt',function(){startQuiz('practice');}),
    histBtn(),
    mode!=='daily'?btn('\u2B05 Back to home','gray',render):null),
-  parentCorner()];
+  logoutBtn(),parentCorner()];
  show(nodes);}
 function todayRec(){var r=recFor(today());return r&&questionsOf(r)?r:null;}
 
 /* ---------- my history ---------- */
-function avgPct(){var h=store.history;if(!h.length)return 0;var t=0;h.forEach(function(r){t+=pct(r);});return Math.round(t/h.length);}
+function avgPct(){var hh=store.history;if(!hh.length)return 0;var t=0;hh.forEach(function(r){t+=pct(r);});return Math.round(t/hh.length);}
+function last7Avg(){var hh=store.history.slice(-7);if(!hh.length)return 0;var t=0;hh.forEach(function(r){t+=pct(r);});return Math.round(t/hh.length);}
 function histBtn(){return btn('\uD83D\uDCC8 My History','blue',renderHistory,'histbtn');}
 var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 function prettyDate(d){var x=new Date(d+'T12:00:00');if(isNaN(x.getTime()))return d;return DOW[x.getDay()]+', '+MON[x.getMonth()]+' '+x.getDate()+', '+x.getFullYear();}
@@ -543,31 +617,68 @@ function shortDate(d){var x=new Date(d+'T12:00:00');if(isNaN(x.getTime()))return
 function pctColor(p){return p>=90?'#00b894':p>=70?'#6c5ce7':p>=50?'#fdcb6e':'#ff7675';}
 function pctText(p){return p>=50&&p<70?'#d9822b':pctColor(p);}
 function svgEl(tag,attrs,text){var e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(var k in attrs)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;return e;}
-function trendChart(recs){ /* last 7 quizzes as a bar chart, inline SVG */
- var W=340,H=170,top=22,bot=30,ch=H-top-bot,n=recs.length,slot=W/Math.max(n,7),bw=Math.min(36,slot*0.66);
- var svg=svgEl('svg',{viewBox:'0 0 '+W+' '+H,class:'chart',role:'img','aria-label':'Bar chart of your last '+n+' quiz scores in percent'});
+/* bars = each quiz %, line = running average % of every quiz up to that day */
+function runningAvgs(){var t=0;return store.history.map(function(r,i){t+=pct(r);return Math.round(t/(i+1));});}
+function trendChart(recs,runs){
+ var W=340,H=180,top=22,bot=30,ch=H-top-bot,n=recs.length,slot=W/Math.max(n,7),bw=Math.min(36,slot*0.66),few=n<=8;
+ var svg=svgEl('svg',{viewBox:'0 0 '+W+' '+H,class:'chart',role:'img','aria-label':'Chart of your last '+n+' quiz scores in percent, with your running average'});
  [0,50,100].forEach(function(g){var y=top+ch-ch*g/100;svg.appendChild(svgEl('line',{x1:0,x2:W,y1:y,y2:y,stroke:'#e8e6ff','stroke-width':g===0?2:1}));});
+ var pts=[];
  recs.forEach(function(r,i){var p=pct(r),bh=Math.max(4,ch*p/100),x=slot*i+(slot-bw)/2,y=top+ch-bh;
-  svg.appendChild(svgEl('rect',{x:x,y:y,width:bw,height:bh,rx:7,fill:pctColor(p)}));
-  svg.appendChild(svgEl('text',{x:x+bw/2,y:y-5,'text-anchor':'middle','font-size':13,fill:'#2d2a4a'},p+'%'));
-  svg.appendChild(svgEl('text',{x:x+bw/2,y:H-10,'text-anchor':'middle','font-size':12,fill:'#636e72'},shortDate(r.date)));});
+  svg.appendChild(svgEl('rect',{x:x,y:y,width:bw,height:bh,rx:5,fill:pctColor(p),'class':'bar'}));
+  if(few)svg.appendChild(svgEl('text',{x:x+bw/2,y:y-5,'text-anchor':'middle','font-size':13,fill:'#2d2a4a'},p+'%'));
+  if(few||i%2===(n-1)%2)svg.appendChild(svgEl('text',{x:x+bw/2,y:H-10,'text-anchor':'middle','font-size':11,fill:'#636e72'},shortDate(r.date)));
+  pts.push((x+bw/2)+','+(top+ch-ch*runs[i]/100));});
+ if(n>=2)svg.appendChild(svgEl('polyline',{points:pts.join(' '),fill:'none',stroke:'#2d2a4a','stroke-width':3,'stroke-linejoin':'round','stroke-linecap':'round','class':'avgline'}));
+ pts.forEach(function(p){var xy=p.split(',');svg.appendChild(svgEl('circle',{cx:xy[0],cy:xy[1],r:3.5,fill:'#2d2a4a'}));});
  return svg;}
 function trendMsg(){var hs=store.history,n=hs.length;if(n<2)return 'Play a few more days to see your trend!';
  var recent=hs.slice(-7),prior=hs.slice(-14,-7);function av(a){var t=0;a.forEach(function(r){t+=pct(r);});return t/a.length;}
  var a,b;if(prior.length){a=av(recent);b=av(prior);}else{a=pct(hs[n-1]);b=pct(hs[0]);}
  var d=a-b;return d>=5?'\uD83D\uDCC8 You\u2019re getting stronger \u2013 your scores are going up!':d<=-5?'\uD83D\uDCAA Scores dipped a little. That\u2019s how we learn \u2013 keep going!':'\uD83D\uDE0E Steady and strong. Keep it up!';}
+/* ---------- areas to work on (misses per question type over time) ---------- */
+var TIPS={addsub:'When a number is added, subtract it from the other side to undo it. When it is subtracted, add it back.',
+ muldiv:'Use your times tables backwards: \u00F7 undoes \u00D7, and \u00D7 undoes \u00F7. Try 3 quick fact drills!',
+ twostep:'Undo the steps in reverse order: first the + or \u2212, then the \u00D7 or \u00F7.',
+ parens:'Do the math inside the parentheses FIRST, then the rest of the equation.',
+ both:'Plug the number into BOTH sides, work each side out, and see if they match.',
+ order:'Order of operations: \u00D7 and \u00F7 come before + and \u2212. Do those first!',
+ multi:'Go slow. Do one step at a time and say each step out loud (or write it down).'};
+function weakAreas(){
+ var st={};
+ store.history.forEach(function(r){var qs=questionsOf(r);
+  if(qs&&qs.length){qs.forEach(function(q){var s=st[q.kind]||(st[q.kind]={att:0,miss:0});s.att++;if(q.userAnswer!==q.truth)s.miss++;});}
+  else for(var k in (r.missed||{})){var s=st[k]||(st[k]={att:0,miss:0});s.miss+=r.missed[k];s.att+=r.missed[k]*2;}}); /* old days w/o questions: assume about half were missed */
+ return Object.keys(st).filter(function(k){return st[k].miss>0&&G.KIND_LABELS[k];}).map(function(k){var s=st[k];return {kind:k,att:s.att,miss:s.miss,rate:Math.round(100*s.miss/s.att)};})
+  .sort(function(a,b){return b.rate-a.rate||b.miss-a.miss;}).slice(0,3);}
+function weakCard(){
+ var wa=weakAreas();
+ return h('div',{class:'card',id:'weak'},h('h2',null,'\uD83C\uDFAF Areas to work on'),
+  !store.history.length?h('p',null,'Finish a quiz and we\u2019ll show which kinds of questions to practice.')
+  :!wa.length?h('p',null,'\uD83C\uDF1F No weak spots so far \u2013 you\u2019re doing great on every type!')
+  :[h('p',{class:'small'},'These are the question types you miss most, across all your quizzes:'),
+    wa.map(function(w){return h('div',{class:'weak'},h('div',{class:'l1'},h('span',null,G.KIND_LABELS[w.kind]),h('span',{class:'pct',style:'color:#d63031'},w.rate+'% missed')),
+     h('div',{class:'progress'},h('i',{style:'width:'+w.rate+'%;background:#ff7675'})),
+     h('div',{class:'small'},'Missed '+w.miss+(w.att>=w.miss?' of '+w.att:'')+' questions'),
+     h('div',{class:'tip'},'\uD83D\uDCA1 '+TIPS[w.kind]));}),
+    btn('\uD83D\uDCAA Practice these now','alt',function(){startQuiz('practice');})]);}
 function renderHistory(){
  Q=null;var hs=store.history.slice().reverse(),all=store.history,n=all.length;
  var best=0;all.forEach(function(r){if(pct(r)>best)best=pct(r);});
- var nodes=[h('h1',null,'\uD83D\uDCC8 My History'),
+ var runs=runningAvgs(),k=Math.min(14,n);
+ var nodes=[h('h1',null,'\uD83D\uDCC8 '+(kid?kid+'\u2019s History':'My History')),
   h('div',{class:'card pop'},
    n?[h('div',{class:'stats'},
-      h('div',{class:'stat'},h('b',null,avgPct()+'%'),h('span',null,'average')),
-      h('div',{class:'stat'},h('b',null,String(n)),h('span',null,n===1?'quiz':'quizzes')),
-      h('div',{class:'stat'},h('b',null,best+'%'),h('span',null,'best'))),
-     h('h3',null,'Your last '+Math.min(7,n)+' '+(n===1?'quiz':'quizzes')),
-     trendChart(all.slice(-7)),h('div',{class:'msg'},trendMsg())]
+      h('div',{class:'stat'},h('b',null,avgPct()+'%'),h('span',null,'overall average')),
+      h('div',{class:'stat'},h('b',null,last7Avg()+'%'),h('span',null,'last 7 average')),
+      h('div',{class:'stat'},h('b',null,best+'%'),h('span',null,'best')),
+      h('div',{class:'stat'},h('b',null,String(n)),h('span',null,n===1?'quiz':'quizzes'))),
+     h('h3',null,'Your last '+k+' '+(k===1?'quiz':'quizzes')),
+     trendChart(all.slice(-k),runs.slice(-k)),
+     h('p',{class:'small legend'},'Bars = each quiz score. Black line = your running average.'),
+     h('div',{class:'msg'},trendMsg())]
     :h('p',null,'No quizzes yet. Finish your first daily quiz and it will show up here!')),
+  weakCard(),
   h('div',{class:'card'},h('h2',null,'\uD83D\uDCCB All my quizzes'),n?h('p',{class:'small'},'Tap a quiz to look at every question again.'):null,
    hs.map(function(r){var p=pct(r);
     return h('button',{class:'hrow',type:'button',onclick:function(){renderPast(r.date);}},
@@ -588,27 +699,124 @@ function renderPast(date){
    qs?[h('p',{class:'small'},'Tap a question to see how it works. Orange ones are the ones to learn from!'),reviewList(rec)]
       :h('p',null,'The question details for this day weren\u2019t saved, but the score is: '+r.score+' out of '+r.total+' ('+p+'%).'),
    btn('\u2B05 Back to My History','blue',renderHistory,'pastback'),btn('\uD83C\uDFE0 Home','gray',render))]);}
+/* ---------- profiles, PIN, login ---------- */
+function keypad(onDone){
+ var val='',busy=false;
+ var dots=h('div',{class:'dots',id:'dots'},[0,1,2,3].map(function(){return h('i',null);}));
+ function paint(){for(var i=0;i<4;i++)dots.children[i].className=i<val.length?'on':'';}
+ function reset(){val='';busy=false;paint();}
+ function press(c){if(busy||val.length>=4)return;val+=c;paint();if(val.length===4){busy=true;onDone(val,reset);}}
+ function back(){if(busy)return;val=val.slice(0,-1);paint();}
+ var keys=['1','2','3','4','5','6','7','8','9','','0','\u232B'].map(function(c){
+  if(c==='')return h('span');
+  return h('button',{type:'button',class:'key',id:c==='\u232B'?'kback':'k'+c,'aria-label':c==='\u232B'?'delete':c,onclick:function(){if(c==='\u232B')back();else press(c);}},c);});
+ nextKH=function(e){if(/^\d$/.test(e.key))press(e.key);else if(e.key==='Backspace')back();};
+ return h('div',null,dots,h('div',{class:'pad'},keys));}
+function renderPicker(msg){
+ Q=null;kid=null;token=null;pending=[];store=blank();setSync('');
+ show([h('h1',null,'\uD83E\uDDE0 Daily Math Quiz'),h('div',{class:'sub'},'True or False? Is the mystery number right?'),
+  h('div',{class:'card pop'},h('h2',{style:'text-align:center'},'Who\u2019s playing today?'),
+   msg?h('div',{class:'msg',id:'pickmsg'},msg):null,
+   KIDS.map(function(n,i){return h('button',{type:'button',class:'btn kid '+(i?'k2':'k1'),id:'pick-'+n,onclick:function(){pickKid(n);}},(i?'\uD83D\uDE80 ':'\uD83E\uDD84 ')+n);}))]);}
+function pickKid(name){
+ var b=document.getElementById('pick-'+name);if(b)b.textContent='One moment\u2026';
+ api({action:'status'}).then(function(r){
+  if(r.net||r.s!==200){renderPicker('We can\u2019t reach the internet right now. Check your connection and try again.');return;}
+  if(r.j.kids&&r.j.kids[name])renderPin(name);else renderSetPin(name);});}
+function pinShell(name,title,sub,pad,extra){
+ return [h('h1',null,title),h('div',{class:'card pop'},h('h2',{style:'text-align:center'},sub),h('div',{class:'msg',id:'pinmsg',style:'display:none'}),pad,extra,
+  btn('\u2B05 Pick a different kid','gray',function(){renderPicker();},'pinback'))];}
+function pinMsg(t){var m=document.getElementById('pinmsg');if(!m)return;m.textContent=t;m.style.display=t?'block':'none';}
+function renderSetPin(name,first,msg){
+ var stage=first?2:1;
+ var pad=keypad(function(pin,reset){
+  if(stage===1){renderSetPin(name,pin);return;}
+  if(pin!==first){renderSetPin(name,null,'Those didn\u2019t match. Let\u2019s try again!');return;}
+  pinMsg('Saving\u2026');
+  api({action:'create_pin',kid:name,pin:pin}).then(function(r){
+   if(r.s===200&&r.j.token){enterSession(name,r.j.token);return;}
+   if(r.s===409){renderPin(name,'That profile already has a PIN. Type it to log in.');return;}
+   pinMsg(r.net?'We can\u2019t reach the internet. Try again in a moment.':'Something went wrong. Please try again.');reset();});});
+ show(pinShell(name,'Hi '+name+'! \uD83D\uDC4B',stage===1?'Make a secret 4-digit PIN':'Type your PIN again to check it',pad,
+  h('p',{class:'small',style:'text-align:center'},'Remember it! You\u2019ll type it each time you play.')));
+ if(msg)pinMsg(msg);}
+function renderPin(name,msg){
+ var pad=keypad(function(pin,reset){
+  pinMsg('Checking\u2026');
+  api({action:'login',kid:name,pin:pin}).then(function(r){
+   if(r.s===200&&r.j.token){enterSession(name,r.j.token);return;}
+   if(r.s===404){renderSetPin(name);return;}
+   if(r.s===401){pinMsg('Oops, that\u2019s not it. '+r.j.attemptsLeft+(r.j.attemptsLeft===1?' try':' tries')+' left.');reset();return;}
+   if(r.s===429){pinMsg('Too many tries. Take a break and try again in '+Math.max(1,Math.ceil((r.j.retryAfter||300)/60))+' minutes.');reset();return;}
+   pinMsg(r.net?'We can\u2019t reach the internet. Try again in a moment.':'Something went wrong. Please try again.');reset();});});
+ if(kid!==name){kid=name;}
+ show(pinShell(name,'Hi '+name+'! \uD83D\uDC4B','Type your PIN',pad,null));
+ if(msg)pinMsg(msg);}
+function logout(){
+ var go=function(){try{sessionStorage.removeItem(SS);}catch(e){}clearTimeout(flushTimer);clearTimeout(retryTimer);renderPicker();};
+ if(token&&pending.length){var done=false,fin=function(){if(!done){done=true;go();}};flush().then(fin);setTimeout(fin,3000);}else go();}
+function enterSession(name,tok){
+ kid=name;token=tok;lostRace=false;try{sessionStorage.setItem(SS,JSON.stringify({kid:name,token:tok}));}catch(e){}
+ cacheLoad();setSync('saving');
+ show([h('h1',null,'\uD83E\uDDE0 Daily Math Quiz'),h('div',{class:'card pop'},h('h2',{style:'text-align:center'},'Loading '+name+'\u2019s progress\u2026'))]);
+ flush().then(function(){return resync(false);});}
+/* pull the saved state from the server (source of truth) */
+function resync(rerender){
+ if(!token)return Promise.resolve();
+ return api({action:'load',token:token}).then(function(r){
+  if(r.s===401){token=null;try{sessionStorage.removeItem(SS);}catch(e){}renderPin(kid,'Please type your PIN again.');return;}
+  if(r.s===200){
+   if(!pending.length){var s=normalize(r.j.state);store=s||blank();save();setSync('saved');}
+   if(!store.history.length&&legacyData()&&lsGet('kyleMathQuiz.skip.'+kid)!=='1'){renderImportPrompt();return;}
+   render();return;}
+  /* offline or server trouble: use the cached copy */
+  setSync('offline');retryTimer=setTimeout(flush,15000);render();});}
+/* ---------- one-time import of the old anonymous browser data ---------- */
+function legacyData(){try{var o=normalize(JSON.parse(lsGet(LEGACY)||'null'));return o&&o.history.length?o:null;}catch(e){return null;}}
+function renderImportPrompt(msg){
+ var lg=legacyData();if(!lg){render();return;}
+ var last=lg.history[lg.history.length-1];
+ show([h('h1',null,'\uD83D\uDCE6 Saved progress found'),
+  h('div',{class:'card pop'},h('h2',null,'Is this '+kid+'\u2019s saved progress?'),
+   h('p',null,'We found '+lg.history.length+' saved '+(lg.history.length===1?'quiz':'quizzes')+' on this device (last one: '+prettyDate(last.date)+', '+pct(last)+'%, now at '+lvName(lg.level)+').'),
+   msg?h('div',{class:'msg',id:'importmsg'},msg):null,
+   btn('Yes, bring it in','go',function(){doImport(lg);},'importyes'),
+   btn('No, start fresh','gray',function(){lsSet('kyleMathQuiz.skip.'+kid,'1');render();},'importno'))]);}
+function doImport(lg){
+ var results=[];
+ lg.history.forEach(function(r){var qs=questionsOf(r);if(qs&&qs.length&&qs.length<=10)results.push({date:r.date,questions:qs.map(function(q){return {kind:q.kind,level:q.level,text:q.text,truth:q.truth,answer:q.userAnswer};})});});
+ var recs=lg.history.map(function(r){var c={};for(var k in r)c[k]=r[k];return c;});
+ var b=document.getElementById('importyes');if(b)b.textContent='Bringing it in\u2026';
+ api({action:'save',token:token,importHistory:recs,importResults:results,level:lg.level}).then(function(r){
+  if(r.s===200){lsDel(LEGACY);api({action:'load',token:token}).then(function(x){if(x.s===200){store=normalize(x.j.state)||blank();save();}render();});return;}
+  if(r.s===409){lsSet('kyleMathQuiz.skip.'+kid,'1');render();return;}
+  renderImportPrompt(r.net?'We can\u2019t reach the internet. Try again in a moment.':'Sorry, we couldn\u2019t bring that in. You can start fresh and your old data stays on this device.');});}
 /* ---------- home ---------- */
 function render(){
- Q=null;store=load();var rec=recFor(today());
+ if(!kid){renderPicker();return;}
+ Q=null;var rec=recFor(today());
  if(rec){renderResults(rec,'daily');return;}
  var ip=store.inProgress;
  if(ip&&ip.date===today()&&ip.answers&&ip.answers.length>0){
-  show([h('h1',null,'Daily Math Quiz'),h('div',{class:'card pop'},h('h2',null,'Welcome back! \uD83D\uDC4B'),h('p',null,'You\u2019re on question '+(ip.answers.length+1)+' of '+TOTAL+'.'),
-   btn('Keep going \u25B6','go',resumeDaily,'resume'),histBtn()),parentCorner()]);return;}
+  show([h('h1',null,'Daily Math Quiz'),h('div',{class:'card pop'},h('h2',null,'Welcome back, '+kid+'! \uD83D\uDC4B'),h('p',null,'You\u2019re on question '+(ip.answers.length+1)+' of '+TOTAL+'.'),
+   btn('Keep going \u25B6','go',resumeDaily,'resume'),histBtn()),logoutBtn(),parentCorner()]);return;}
  var first=isFirst(),f=focusText(missedFocus()),ds=dayStreak();
- show([h('h1',null,'\uD83E\uDDE0 Daily Math Quiz'),h('div',{class:'sub'},'True or False? Is the mystery number right?'),
+ show([h('h1',null,'\uD83E\uDDE0 Daily Math Quiz'),h('div',{class:'sub',id:'whoami'},'Hi '+kid+'! \uD83D\uDC4B'),
   h('div',{class:'card pop'},
    h('div',{class:'row'},h('span',{class:'badge'},first?'Level 1 to start':lvName(store.level)),ds?h('span',{class:'badge'},'\uD83D\uDD25 '+ds+' day streak'):null),
    h('h2',null,first?'Hi, math star! \uD83D\uDC4B':'Ready for today\u2019s 10?'),
    h('p',null,first?'Each question gives you a number for a letter. Is the equation true or false when you use that number? We start easy and the questions get harder as you do well!':'10 new questions are waiting. They start a little easier and get harder as you get them right.'),
    (!first&&f.length)?h('p',{class:'small'},'\uD83C\uDFAF Extra practice today on: '+f.join(', ')):null,
    h('div',{class:'tip'},'Example: If M = 49, is M \u00F7 7 = 7 true? Plug it in: 49 \u00F7 7 = 7. Yes, TRUE!'),
-   btn('Start today\u2019s quiz \u25B6','go',function(){startQuiz('daily');},'start'),store.history.length?histBtn():null),
-  parentCorner()]);}
-document.addEventListener('visibilitychange',function(){if(!document.hidden&&!Q){render();}});
-render();
-window.__quiz={store:function(){return store;},render:render,history:renderHistory,past:renderPast};
+   btn('Start today\u2019s quiz \u25B6','go',renderReminder,'start'),store.history.length?histBtn():null),
+  logoutBtn(),parentCorner()]);}
+document.addEventListener('visibilitychange',function(){if(!document.hidden&&kid&&!Q&&token){flush().then(function(){if(!pending.length&&!Q)resync(false);});}});
+/* ---------- boot: resume this tab's session, otherwise ask who is playing ---------- */
+(function boot(){
+ var s=null;try{s=JSON.parse(sessionStorage.getItem(SS)||'null');}catch(e){}
+ if(s&&KIDS.indexOf(s.kid)>=0&&typeof s.token==='string'){enterSession(s.kid,s.token);return;}
+ renderPicker();})();
+window.__quiz={store:function(){return store;},kid:function(){return kid;},render:render,history:renderHistory,past:renderPast};
 })();
 </script>
 </body>
