@@ -57,6 +57,18 @@ table{width:100%;border-collapse:collapse;font-size:15px}
 th,td{padding:6px 5px;border-bottom:1px solid #eee;text-align:left;vertical-align:top}
 select{font:inherit;font-size:18px;padding:10px;border-radius:12px;border:2px solid #a29bfe}
 .small{font-size:15px;color:#555}
+.hrow{display:block;width:100%;text-align:left;font:inherit;background:#fff;border:3px solid #e8e6ff;border-radius:18px;padding:12px 14px;margin:10px 0;cursor:pointer;color:#2d2a4a;box-shadow:0 4px 0 rgba(108,92,231,.18)}
+.hrow:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(108,92,231,.18)}
+.hrow .l1{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-weight:900;font-size:19px}
+.hrow .pct{font-size:26px;color:#6c5ce7}
+.hrow .l2{display:flex;justify-content:space-between;gap:8px;font-size:16px;font-weight:700;color:#555;margin-top:2px}
+.hrow .progress{height:12px;margin:8px 0 2px}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0}
+.stat{flex:1 1 90px;background:#f6f4ff;border-radius:16px;padding:10px 8px;text-align:center}
+.stat b{display:block;font-size:30px;color:#6c5ce7;line-height:1.1}
+.stat span{font-size:14px;font-weight:700;color:#555}
+.chart{width:100%;height:auto;display:block;margin:6px 0}
+.chart text{font-family:inherit;font-weight:800}
 .pop{animation:pop .35s}
 @keyframes pop{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
 @media (prefers-reduced-motion:reduce){.pop{animation:none}.progress i{transition:none}}
@@ -296,6 +308,36 @@ function makeQuestion(o){var level=o.level;
   return {level:level,kind:ent.kind,label:KIND_LABELS[ent.kind],vn:vn,p:p,s:s,truth:truth,eq:eqText,text:text,
    plug:plug.lines,undo:undo,tip:tip,shortExpl:shortExpl,lv:lv,rv:rv};}
  throw new Error('could not generate question at level '+level+' seed '+o.seed);}
+
+/* ---------- compact storage for past quizzes ---------- */
+function tipFor(ops){
+ if(ops&&ops.length){var bits=[];for(var m=0;m<ops.length;m++){var op=ops.charAt(m);
+   var opp=op==='+'?MINUS:op===MINUS?'+':op===TIMES?DIV:TIMES;bits.push('"'+op+'" is undone by "'+opp+'"');}
+  return 'Opposite-operation tip: + and '+MINUS+' undo each other, and '+TIMES+' and '+DIV+' undo each other. Here, '+bits.join(', ')+'. Undo the steps backwards, last step first!';}
+ return 'Opposite-operation tip: + and '+MINUS+' undo each other, and '+TIMES+' and '+DIV+' undo each other. When the mystery number is on both sides, do the same thing to BOTH sides to keep it balanced, like a seesaw!';}
+function compactQ(q){var ops='',re=/"(.)" is undone by/g,m,t=q.tip||'';
+ if(t.indexOf('Here, ')>=0){while((m=re.exec(t)))ops+=m[1];}
+ return {l:q.level,k:q.kind,v:q.vn,p:q.p,s:q.s,t:q.truth?1:0,e:q.eq,P:q.plug,U:q.undo,o:ops,a:q.userAnswer===true?1:q.userAnswer===false?0:-1,x:q.lv,y:q.rv};}
+function expandQ(c){var truth=!!c.t,vn=c.v,p=c.p,s=c.s;
+ var shortExpl=truth?('Yes! With '+vn+' = '+p+', both sides equal '+c.x+'.'):('Right! With '+vn+' = '+p+' the sides are '+c.x+' and '+c.y+', which don\u2019t match. '+vn+' should be '+s+'.');
+ return {level:c.l,kind:c.k,label:KIND_LABELS[c.k],vn:vn,p:p,s:s,truth:truth,eq:c.e,text:'If '+vn+' = '+p+', is '+c.e+' true or false?',
+  plug:c.P,undo:c.U,tip:tipFor(c.o),shortExpl:shortExpl,lv:c.x,rv:c.y,userAnswer:c.a===1?true:c.a===0?false:undefined};}
+/* tiny LZW (UTF-8 bytes -> 16-bit chars below the surrogate range) so a year of quizzes stays small */
+function lzPack(str){var b=unescape(encodeURIComponent(str)),d={},n=256,w='',out=[],i,c,wc;
+ for(i=0;i<b.length;i++){c=b.charAt(i);wc=w+c;if(wc.length===1||d.hasOwnProperty(wc))w=wc;
+  else{out.push(w.length===1?w.charCodeAt(0):d[w]);if(n<0xD000)d[wc]=n++;w=c;}}
+ if(w!=='')out.push(w.length===1?w.charCodeAt(0):d[w]);
+ return out.map(function(x){return String.fromCharCode(x);}).join('');}
+function lzUnpack(z){var d={},n=256,i,k,w,entry,out,codes=[];for(i=0;i<z.length;i++)codes.push(z.charCodeAt(i));
+ if(!codes.length)return '';
+ function dec(x){return x<256?String.fromCharCode(x):d[x];}
+ w=String.fromCharCode(codes[0]);out=[w];
+ for(i=1;i<codes.length;i++){k=codes[i];
+  if(k<256)entry=String.fromCharCode(k);else if(d.hasOwnProperty(k))entry=d[k];else if(k===n)entry=w+w.charAt(0);else throw new Error('bad data');
+  out.push(entry);if(n<0xD000)d[n++]=w+entry.charAt(0);w=entry;}
+ return decodeURIComponent(escape(out.join('')));}
+function packQuestions(qs){return lzPack(JSON.stringify(qs.map(compactQ)));}
+function unpackQuestions(z){var a=JSON.parse(lzUnpack(z));if(!Array.isArray(a))throw new Error('bad');return a.map(expandQ);}
 /* ---------- schedule & adaptive rules ---------- */
 function schedule(seed){var r=rngFromSeed('sched|'+seed);return shuffle(r,[true,true,true,true,true,false,false,false,false,false]);}
 function nextQuestionLevel(base,first,results){
@@ -313,6 +355,7 @@ function nextDayLevel(base,score,first,endLevel){
  return {level:base,change:'same'};}
 function dateKey(d){d=d||new Date();var m=d.getMonth()+1,day=d.getDate();return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(day<10?'0':'')+day;}
 return {makeQuestion:makeQuestion,schedule:schedule,nextQuestionLevel:nextQuestionLevel,nextDayLevel:nextDayLevel,dateKey:dateKey,
+ packQuestions:packQuestions,unpackQuestions:unpackQuestions,compactQ:compactQ,expandQ:expandQ,lzPack:lzPack,lzUnpack:lzUnpack,
  KIND_LABELS:KIND_LABELS,LEVEL_NAMES:LEVEL_NAMES,POOLS:POOLS,rngFromSeed:rngFromSeed};
 })();
 if(typeof module!=='undefined')module.exports=QuizGen;
@@ -327,13 +370,31 @@ var params=(function(){try{return new URLSearchParams(location.search);}catch(e)
 function today(){var d=params.get('date');return /^\d{4}-\d{2}-\d{2}$/.test(d||'')?d:G.dateKey(new Date());}
 /* ---------- storage ---------- */
 var mem=null;
-function blank(){return {v:1,level:1,history:[],inProgress:null};}
-function load(){try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);if(o&&o.v===1&&o.history)return o;}}catch(e){}return mem||blank();}
+var SCHEMA=2;
+function blank(){return {v:SCHEMA,level:1,history:[],inProgress:null};}
+function pct(r){return r.total?Math.round(100*r.score/r.total):0;}
+/* accepts schema v1 (old saves, maybe with no questions for old days) and v2; never throws */
+function normalize(o){
+ if(!o||(o.v!==1&&o.v!==2)||!Array.isArray(o.history))return null;
+ var out={v:SCHEMA,level:Math.min(10,Math.max(1,parseInt(o.level,10)||1)),history:[],inProgress:o.inProgress||null};
+ o.history.forEach(function(r){
+  if(!r||typeof r.date!=='string'||typeof r.score!=='number')return;
+  var n={date:r.date,startLevel:r.startLevel||1,first:!!r.first,score:r.score,total:r.total||10,missed:r.missed||{},levelAfter:r.levelAfter||r.startLevel||1,change:r.change||'same',best:r.best||0};
+  if(r.texts)n.texts=r.texts;
+  if(typeof r.qz==='string')n.qz=r.qz;
+  else if(Array.isArray(r.questions)&&r.questions.length){try{n.qz=G.packQuestions(r.questions);}catch(e){}}
+  out.history.push(n);});
+ return out;}
+var qcache={};
+function questionsOf(r){ /* full question list for a past day, or null if none was saved */
+ if(!r||!r.qz)return null;if(qcache[r.date+r.qz.length])return qcache[r.date+r.qz.length];
+ try{var qs=G.unpackQuestions(r.qz);if(qs.length){qcache[r.date+r.qz.length]=qs;return qs;}}catch(e){}return null;}
+function load(){try{var raw=localStorage.getItem(KEY);if(raw){var o=normalize(JSON.parse(raw));if(o)return o;}}catch(e){}return mem||blank();}
 function save(){mem=store;try{localStorage.setItem(KEY,JSON.stringify(store));}catch(e){}}
 var store=load();
 function recFor(date){for(var i=0;i<store.history.length;i++)if(store.history[i].date===date)return store.history[i];return null;}
 function isFirst(){return store.history.length===0;}
-function prune(){var n=store.history.length;for(var i=0;i<n;i++){if(i<n-7&&store.history[i].questions)delete store.history[i].questions;}}
+function prune(){var n=store.history.length;for(var i=0;i<n-3;i++){delete store.history[i].texts;}} /* all past questions are kept (compressed); only the repeat-avoid texts are trimmed */
 /* ---------- helpers ---------- */
 function h(tag,attrs){var e=document.createElement(tag);
  if(attrs)for(var k in attrs){var v=attrs[k];if(v==null||v===false)continue;if(k==='class')e.className=v;else if(k==='text')e.textContent=v;else if(k.indexOf('on')===0)e.addEventListener(k.slice(2),v);else e.setAttribute(k,v);}
@@ -353,13 +414,13 @@ function dayStreak(){var d=today(),n=0,dates={};store.history.forEach(function(r
  var cur=new Date(d+'T12:00:00');if(!dates[d])cur.setDate(cur.getDate()-1);
  while(dates[G.dateKey(cur)]){n++;cur.setDate(cur.getDate()-1);}return n;}
 function parentCorner(){
- var rows=store.history.slice().reverse().map(function(r){return h('tr',null,h('td',null,r.date),h('td',null,String(r.startLevel)),h('td',null,r.score+'/'+r.total),
+ var rows=store.history.slice().reverse().map(function(r){return h('tr',null,h('td',null,r.date),h('td',null,String(r.startLevel)),h('td',null,r.score+'/'+r.total),h('td',null,pct(r)+'%'),
   h('td',null,Object.keys(r.missed||{}).map(function(k){return G.KIND_LABELS[k]+' ('+r.missed[k]+')';}).join(', ')||'\u2014'));});
  var sel=h('select',{id:'lvlsel'},G.LEVEL_NAMES.map(function(n,i){var o=h('option',{value:String(i+1)},'Level '+(i+1)+' \u2013 '+n);if(i+1===store.level)o.selected=true;return o;}));
  return h('details',{class:'parent'},h('summary',null,'\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC66 Parent corner'),
   h('div',{class:'card'},
-   h('p',null,'Current level: '+lvName(store.level)+'. Days played: '+store.history.length+'.'),
-   rows.length?h('table',null,h('tr',null,h('th',null,'Date'),h('th',null,'Start lvl'),h('th',null,'Score'),h('th',null,'Missed')),rows):h('p',{class:'small'},'No quizzes yet.'),
+   h('p',null,'Current level: '+lvName(store.level)+'. Days played: '+store.history.length+(store.history.length?'. Average: '+avgPct()+'%.':'.')),
+   rows.length?h('table',null,h('tr',null,h('th',null,'Date'),h('th',null,'Start lvl'),h('th',null,'Score'),h('th',null,'%'),h('th',null,'Missed')),rows):h('p',{class:'small'},'No quizzes yet.'),
    h('p',{class:'small'},'How it works: 9\u201310 right \u2192 next day goes up a level. 7\u20138 \u2192 stay. 5\u20136 \u2192 stay and practice the missed question types. 4 or fewer \u2192 down one level. Inside a quiz, 3 right in a row makes questions harder and a miss makes the next one easier. Progress is saved only in this browser on this device.'),
    h('p',null,'Change the starting level for the next quiz:'),sel,
    btn('Save level','blue',function(){store.level=parseInt(document.getElementById('lvlsel').value,10);save();render();}),
@@ -439,7 +500,7 @@ function finishQuiz(){
   var endLevel=G.nextQuestionLevel(Q.base,Q.first,results);
   var nd=G.nextDayLevel(Q.base,score,Q.first,endLevel);
   var rec={date:Q.date,startLevel:Q.base,first:Q.first,score:score,total:TOTAL,missed:missed,levelAfter:nd.level,change:nd.change,best:Q.best,
-   texts:Q.qs.map(function(q){return q.text;}),questions:Q.qs.map(function(q,i){var c={};for(var k in q)c[k]=q[k];c.userAnswer=Q.answers[i];return c;})};
+   texts:Q.qs.map(function(q){return q.text;}),qz:G.packQuestions(Q.qs.map(function(q,i){var c={};for(var k in q)c[k]=q[k];c.userAnswer=Q.answers[i];return c;}))};
   store.history.push(rec);store.level=nd.level;store.inProgress=null;prune();save();
   renderResults(rec,'daily');}
  else{renderResults({date:Q.date,startLevel:Q.base,score:score,total:TOTAL,missed:missed,best:Q.best,
@@ -452,25 +513,81 @@ function levelMsg(rec){var n=rec.levelAfter;
  if(rec.change==='bottom')return '\uD83C\uDF31 Tomorrow we\u2019ll practice Level 1 again so it feels super easy. You\u2019re doing great!';
  var f=focusText(rec.missed);return '\uD83D\uDC4D You\u2019ll stay at '+lvName(n)+' tomorrow.'+(f.length?' We\u2019ll practice '+f.join(' and ')+' a bit more.':' Keep it up!');}
 function scoreMsg(s){return s===10?'PERFECT! \uD83E\uDD29':s>=9?'Amazing! \uD83C\uDF1F':s>=7?'Great job! \uD83D\uDE0A':s>=5?'Nice work! Keep going! \uD83D\uDCAA':'Good effort! Every try makes you stronger! \uD83C\uDF31';}
-function reviewList(rec){return (rec.questions||[]).map(function(q,i){var ok=q.userAnswer===q.truth;
+function reviewList(rec){return (rec.questions||questionsOf(rec)||[]).map(function(q,i){var ok=q.userAnswer===q.truth;
  var d=h('details',{class:'rev '+(ok?'ok':'no')},h('summary',null,(ok?'\u2705 ':'\uD83D\uDFE0 ')+(i+1)+'. If '+q.vn+' = '+q.p+':  '+q.eq+'  \u2192 '+(q.truth?'True':'False')),
   h('div',{class:'inner'},h('p',null,'You said '+(q.userAnswer?'True':'False')+'. '+q.shortExpl),
    ok?null:[h('h3',null,'Plug it in'),stepsList(q.plug),h('h3',null,'What should '+q.vn+' be?'),stepsList(q.undo),h('div',{class:'tip'},'\uD83D\uDCA1 '+q.tip)]));return d;});}
 function renderResults(rec,mode){
  var stars=rec.score>=9?'\u2B50\u2B50\u2B50':rec.score>=7?'\u2B50\u2B50':rec.score>=5?'\u2B50':'\uD83C\uDF31';
  var nodes=[h('h1',null,mode==='daily'?'Quiz complete!':mode==='practice'?'Practice done!':'Retry done!'),
-  h('div',{class:'card pop'},h('div',{class:'big'},rec.score+' / '+rec.total),h('div',{class:'stars'},stars),h('h2',{style:'text-align:center'},scoreMsg(rec.score)),
+  h('div',{class:'card pop'},h('div',{class:'big'},rec.score+' / '+rec.total),h('div',{style:'text-align:center;font-size:30px;font-weight:900;color:#00b894'},pct(rec)+'%'),h('div',{class:'stars'},stars),h('h2',{style:'text-align:center'},scoreMsg(rec.score)),
    rec.best?h('p',{style:'text-align:center'},'\uD83D\uDD25 Best streak: '+rec.best):null,
    mode==='daily'?h('div',{class:'msg',id:'levelmsg'},levelMsg(rec)):h('div',{class:'msg'},'This was just for fun \u2013 your daily record didn\u2019t change.'),
    (mode==='daily'&&Object.keys(rec.missed).length)?h('p',null,'Types to keep practicing: '+Object.keys(rec.missed).map(function(k){return G.KIND_LABELS[k];}).join(', ')+'.'):null,
    mode==='daily'?h('div',{class:'tip'},'\uD83D\uDCC5 Come back tomorrow for a brand-new set of 10 questions!'):null),
   h('div',{class:'card'},h('h2',null,'\uD83D\uDCCB Review today\u2019s questions'),h('p',{class:'small'},'Tap a question to see how it works.'),reviewList(rec),
-   (mode==='daily'||mode==='retry')&&todayRec()?btn('\uD83D\uDD01 Try today\u2019s questions again','blue',function(){var r=todayRec();if(r&&r.questions){startQuiz('retry',r.questions.map(function(q){var c={};for(var k in q)c[k]=q[k];delete c.userAnswer;return c;}));}}):null,
+   (mode==='daily'||mode==='retry')&&todayRec()?btn('\uD83D\uDD01 Try today\u2019s questions again','blue',function(){var r=todayRec(),qs=r&&questionsOf(r);if(qs){startQuiz('retry',qs.map(function(q){var c={};for(var k in q)c[k]=q[k];delete c.userAnswer;return c;}));}}):null,
    btn('\uD83D\uDCAA Practice more','alt',function(){startQuiz('practice');}),
+   histBtn(),
    mode!=='daily'?btn('\u2B05 Back to home','gray',render):null),
   parentCorner()];
  show(nodes);}
-function todayRec(){var r=recFor(today());return r&&r.questions?r:null;}
+function todayRec(){var r=recFor(today());return r&&questionsOf(r)?r:null;}
+
+/* ---------- my history ---------- */
+function avgPct(){var h=store.history;if(!h.length)return 0;var t=0;h.forEach(function(r){t+=pct(r);});return Math.round(t/h.length);}
+function histBtn(){return btn('\uD83D\uDCC8 My History','blue',renderHistory,'histbtn');}
+var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function prettyDate(d){var x=new Date(d+'T12:00:00');if(isNaN(x.getTime()))return d;return DOW[x.getDay()]+', '+MON[x.getMonth()]+' '+x.getDate()+', '+x.getFullYear();}
+function shortDate(d){var x=new Date(d+'T12:00:00');if(isNaN(x.getTime()))return d;return (x.getMonth()+1)+'/'+x.getDate();}
+function pctColor(p){return p>=90?'#00b894':p>=70?'#6c5ce7':p>=50?'#fdcb6e':'#ff7675';}
+function pctText(p){return p>=50&&p<70?'#d9822b':pctColor(p);}
+function svgEl(tag,attrs,text){var e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(var k in attrs)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;return e;}
+function trendChart(recs){ /* last 7 quizzes as a bar chart, inline SVG */
+ var W=340,H=170,top=22,bot=30,ch=H-top-bot,n=recs.length,slot=W/Math.max(n,7),bw=Math.min(36,slot*0.66);
+ var svg=svgEl('svg',{viewBox:'0 0 '+W+' '+H,class:'chart',role:'img','aria-label':'Bar chart of your last '+n+' quiz scores in percent'});
+ [0,50,100].forEach(function(g){var y=top+ch-ch*g/100;svg.appendChild(svgEl('line',{x1:0,x2:W,y1:y,y2:y,stroke:'#e8e6ff','stroke-width':g===0?2:1}));});
+ recs.forEach(function(r,i){var p=pct(r),bh=Math.max(4,ch*p/100),x=slot*i+(slot-bw)/2,y=top+ch-bh;
+  svg.appendChild(svgEl('rect',{x:x,y:y,width:bw,height:bh,rx:7,fill:pctColor(p)}));
+  svg.appendChild(svgEl('text',{x:x+bw/2,y:y-5,'text-anchor':'middle','font-size':13,fill:'#2d2a4a'},p+'%'));
+  svg.appendChild(svgEl('text',{x:x+bw/2,y:H-10,'text-anchor':'middle','font-size':12,fill:'#636e72'},shortDate(r.date)));});
+ return svg;}
+function trendMsg(){var hs=store.history,n=hs.length;if(n<2)return 'Play a few more days to see your trend!';
+ var recent=hs.slice(-7),prior=hs.slice(-14,-7);function av(a){var t=0;a.forEach(function(r){t+=pct(r);});return t/a.length;}
+ var a,b;if(prior.length){a=av(recent);b=av(prior);}else{a=pct(hs[n-1]);b=pct(hs[0]);}
+ var d=a-b;return d>=5?'\uD83D\uDCC8 You\u2019re getting stronger \u2013 your scores are going up!':d<=-5?'\uD83D\uDCAA Scores dipped a little. That\u2019s how we learn \u2013 keep going!':'\uD83D\uDE0E Steady and strong. Keep it up!';}
+function renderHistory(){
+ Q=null;var hs=store.history.slice().reverse(),all=store.history,n=all.length;
+ var best=0;all.forEach(function(r){if(pct(r)>best)best=pct(r);});
+ var nodes=[h('h1',null,'\uD83D\uDCC8 My History'),
+  h('div',{class:'card pop'},
+   n?[h('div',{class:'stats'},
+      h('div',{class:'stat'},h('b',null,avgPct()+'%'),h('span',null,'average')),
+      h('div',{class:'stat'},h('b',null,String(n)),h('span',null,n===1?'quiz':'quizzes')),
+      h('div',{class:'stat'},h('b',null,best+'%'),h('span',null,'best'))),
+     h('h3',null,'Your last '+Math.min(7,n)+' '+(n===1?'quiz':'quizzes')),
+     trendChart(all.slice(-7)),h('div',{class:'msg'},trendMsg())]
+    :h('p',null,'No quizzes yet. Finish your first daily quiz and it will show up here!')),
+  h('div',{class:'card'},h('h2',null,'\uD83D\uDCCB All my quizzes'),n?h('p',{class:'small'},'Tap a quiz to look at every question again.'):null,
+   hs.map(function(r){var p=pct(r);
+    return h('button',{class:'hrow',type:'button',onclick:function(){renderPast(r.date);}},
+     h('div',{class:'l1'},h('span',null,prettyDate(r.date)),h('span',{class:'pct',style:'color:'+pctText(p)},p+'%')),
+     h('div',{class:'progress'},h('i',{style:'width:'+p+'%;background:'+pctColor(p)})),
+     h('div',{class:'l2'},h('span',null,r.score+'/'+r.total+' right'),h('span',null,'Level '+r.startLevel)));}),
+   btn('\u2B05 Back','gray',render,'histback'))];
+ show(nodes);}
+function renderPast(date){
+ var r=recFor(date);if(!r){renderHistory();return;}var p=pct(r),qs=questionsOf(r);
+ var rec={questions:qs};
+ show([h('h1',null,'Quiz review'),
+  h('div',{class:'card pop'},h('p',{style:'text-align:center;font-weight:800;margin:0'},prettyDate(r.date)),
+   h('div',{class:'big'},r.score+' / '+r.total),h('div',{style:'text-align:center;font-size:30px;font-weight:900;color:'+pctText(p)},p+'%'),
+   h('p',{style:'text-align:center'},lvName(r.startLevel)+(r.best?'  \u2022  \uD83D\uDD25 Best streak: '+r.best:'')),
+   Object.keys(r.missed||{}).length?h('p',{class:'small',style:'text-align:center'},'Practice more: '+Object.keys(r.missed).map(function(k){return G.KIND_LABELS[k]||k;}).join(', ')+'.'):null),
+  h('div',{class:'card'},h('h2',null,'\uD83D\uDCCB The questions'),
+   qs?[h('p',{class:'small'},'Tap a question to see how it works. Orange ones are the ones to learn from!'),reviewList(rec)]
+      :h('p',null,'The question details for this day weren\u2019t saved, but the score is: '+r.score+' out of '+r.total+' ('+p+'%).'),
+   btn('\u2B05 Back to My History','blue',renderHistory,'pastback'),btn('\uD83C\uDFE0 Home','gray',render))]);}
 /* ---------- home ---------- */
 function render(){
  Q=null;store=load();var rec=recFor(today());
@@ -478,7 +595,7 @@ function render(){
  var ip=store.inProgress;
  if(ip&&ip.date===today()&&ip.answers&&ip.answers.length>0){
   show([h('h1',null,'Daily Math Quiz'),h('div',{class:'card pop'},h('h2',null,'Welcome back! \uD83D\uDC4B'),h('p',null,'You\u2019re on question '+(ip.answers.length+1)+' of '+TOTAL+'.'),
-   btn('Keep going \u25B6','go',resumeDaily,'resume')),parentCorner()]);return;}
+   btn('Keep going \u25B6','go',resumeDaily,'resume'),histBtn()),parentCorner()]);return;}
  var first=isFirst(),f=focusText(missedFocus()),ds=dayStreak();
  show([h('h1',null,'\uD83E\uDDE0 Daily Math Quiz'),h('div',{class:'sub'},'True or False? Is the mystery number right?'),
   h('div',{class:'card pop'},
@@ -487,11 +604,11 @@ function render(){
    h('p',null,first?'Each question gives you a number for a letter. Is the equation true or false when you use that number? We start easy and the questions get harder as you do well!':'10 new questions are waiting. They start a little easier and get harder as you get them right.'),
    (!first&&f.length)?h('p',{class:'small'},'\uD83C\uDFAF Extra practice today on: '+f.join(', ')):null,
    h('div',{class:'tip'},'Example: If M = 49, is M \u00F7 7 = 7 true? Plug it in: 49 \u00F7 7 = 7. Yes, TRUE!'),
-   btn('Start today\u2019s quiz \u25B6','go',function(){startQuiz('daily');},'start')),
+   btn('Start today\u2019s quiz \u25B6','go',function(){startQuiz('daily');},'start'),store.history.length?histBtn():null),
   parentCorner()]);}
 document.addEventListener('visibilitychange',function(){if(!document.hidden&&!Q){render();}});
 render();
-window.__quiz={store:function(){return store;},render:render};
+window.__quiz={store:function(){return store;},render:render,history:renderHistory,past:renderPast};
 })();
 </script>
 </body>
