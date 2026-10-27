@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#2d3436">
+<title>Parent area</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#2d3436;background:#f1f2f6;padding:12px 10px 60px;line-height:1.4}
+#app{max-width:900px;margin:0 auto}
+h1{font-size:22px;margin:6px 0 2px}
+h2{font-size:18px;margin:0 0 8px}
+h3{font-size:16px;margin:14px 0 6px}
+.card{background:#fff;border-radius:12px;padding:14px;margin:10px 0;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.small{font-size:13px;color:#555}
+.muted{color:#777}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+button{font:inherit;border:0;border-radius:8px;padding:10px 14px;min-height:44px;background:#0984e3;color:#fff;font-weight:700;cursor:pointer}
+button.gray{background:#636e72}button.sm{min-height:34px;padding:5px 10px;font-size:13px}
+button:disabled{opacity:.5}
+input,select{font:inherit;padding:10px;border:1px solid #b2bec3;border-radius:8px;min-height:44px;max-width:100%}
+input[type=password]{letter-spacing:4px;width:12em}
+.tabs{display:flex;gap:8px;margin:8px 0}
+.tabs button{flex:1;background:#dfe6e9;color:#2d3436}
+.tabs button.on{background:#2d3436;color:#fff}
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid #dfe6e9;padding:6px 6px;text-align:left;vertical-align:top}
+th{background:#f1f2f6;white-space:nowrap}
+tr.tp td{background:#f8f9fa}
+.est{display:inline-block;border-radius:12px;padding:2px 8px;font-size:12px;font-weight:700}
+.est.collecting{background:#dfe6e9;color:#2d3436}
+.est.approaching{background:#ffeaa7;color:#6c4a00}
+.est.ontrack{background:#c8f7e4;color:#065f46}
+.est.ahead{background:#d0e8ff;color:#0b4f9c}
+.msg{color:#b33a3a;font-weight:700;margin:8px 0}
+.ok{color:#0a7a55;font-weight:700;margin:8px 0}
+.q{border-bottom:1px solid #dfe6e9;padding:8px 0}
+.q .t{white-space:pre-wrap;word-break:break-word}
+.yes{color:#0a7a55;font-weight:700}.no{color:#b33a3a;font-weight:700}
+.warn{background:#fff8e1;border-left:4px solid #fdcb6e;padding:8px 10px;border-radius:6px;font-size:13px}
+</style>
+</head>
+<body>
+<div id="app"><div class="card"><p>Loading…</p></div></div>
+<noscript><div class="card">This page needs JavaScript.</div></noscript>
+<script>
+(function(){
+'use strict';
+var API='https://lfbauhcrqfwrwlvlyysf.supabase.co/functions/v1/parent-api';
+var SS='kmq.parent.session';
+var KIDS=['Lillian','Christian'];
+var LEVEL_NAMES=['Number Newbie','Times-Table Tiger','Number Ninja','Puzzle Solver','Equation Explorer','Brain Builder','Balance Master','Parentheses Pro','Algebra Ace','Math Wizard'];
+var MIN_ATT=5;
+var app=document.getElementById('app');
+var token=null,expiresAt=0,data=null,curKid=KIDS[0],timer=null,skew=0;
+
+/* ---------- tiny DOM helper (text only: nothing from the server is ever inserted as HTML) ---------- */
+function h(tag,attrs){var e=document.createElement(tag);
+ if(attrs)for(var k in attrs){var v=attrs[k];if(v==null||v===false)continue;if(k==='class')e.className=v;else if(k.indexOf('on')===0)e.addEventListener(k.slice(2),v);else e.setAttribute(k,v);}
+ function add(c){if(c==null||c===false)return;if(Array.isArray(c))c.forEach(add);else e.appendChild(typeof c==='object'?c:document.createTextNode(String(c)));}
+ for(var i=2;i<arguments.length;i++)add(arguments[i]);return e;}
+function show(nodes){app.textContent='';nodes.forEach(function(n){if(n)app.appendChild(n);});window.scrollTo(0,0);}
+function num(x){return x==null?null:Number(x);}
+function pctTxt(x){return x==null||x===''?'\u2014':Math.round(Number(x))+'%';}
+
+/* ---------- server calls ---------- */
+function api(body){
+ return new Promise(function(res){var done=false;
+  function fin(o){if(done)return;done=true;clearTimeout(t);res(o);}
+  var t=setTimeout(function(){fin({net:true});},20000);
+  try{fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){
+   return r.json().catch(function(){return {};}).then(function(j){if(r.status>=500)fin({net:true});else fin({s:r.status,j:j||{}});});
+  }).catch(function(){fin({net:true});});}catch(e){fin({net:true});}});}
+function authed(body){body.token=token;return api(body).then(function(r){if(r.s===401&&r.j&&r.j.error==='auth'){endSession('Your session ended. Please sign in again.');return null;}return r;});}
+
+/* ---------- session ---------- */
+function saveSession(){try{sessionStorage.setItem(SS,JSON.stringify({t:token,e:expiresAt}));}catch(e){}}
+function endSession(msg){token=null;expiresAt=0;data=null;if(timer){clearInterval(timer);timer=null;}try{sessionStorage.removeItem(SS);}catch(e){}renderLogin(msg);}
+function startTimer(){if(timer)clearInterval(timer);timer=setInterval(function(){var left=expiresAt-Date.now();if(left<=0)endSession('Your 30-minute session ended. Please sign in again.');else{var s=document.getElementById('sessleft');if(s)s.textContent=Math.max(1,Math.ceil(left/60000))+' min';}},15000);}
+
+/* ---------- login ---------- */
+function renderLogin(msg){
+ var pin=h('input',{id:'pin',type:'password',inputmode:'numeric',autocomplete:'off',maxlength:'8','aria-label':'Parent PIN',placeholder:'PIN'});
+ var m=h('div',{id:'loginmsg',class:'msg','aria-live':'polite'},msg||'');
+ var go=h('button',{id:'loginbtn',type:'button'},'Sign in');
+ function submit(){var v=pin.value;
+  if(!/^\d{4,8}$/.test(v)){m.className='msg';m.textContent='Type your 4 to 8 digit parent PIN.';return;}
+  go.disabled=true;m.className='muted';m.textContent='Checking\u2026';
+  api({action:'login',pin:v}).then(function(r){pin.value='';go.disabled=false;
+   if(r.net){m.className='msg';m.textContent='Cannot reach the server. Check the internet and try again.';return;}
+   if(r.s===200&&r.j.token){token=r.j.token;expiresAt=num(r.j.expiresAt)||Date.now()+30*60000;skew=0;saveSession();startTimer();load();return;}
+   m.className='msg';
+   if(r.s===429){var mins=Math.max(1,Math.ceil((num(r.j.retryAfter)||900)/60));m.textContent='Too many wrong PINs. Locked for about '+mins+' minute'+(mins===1?'':'s')+'. Try again later.';}
+   else if(r.s===401){m.textContent='That PIN is not right.'+(typeof r.j.attemptsLeft==='number'?' '+r.j.attemptsLeft+' '+(r.j.attemptsLeft===1?'try':'tries')+' left before a lock.':'');}
+   else if(r.s===503){m.textContent='The parent PIN is not set up yet. Ask Kyle\u2019s assistant.';}
+   else m.textContent='Could not sign in.';});}
+ go.addEventListener('click',submit);pin.addEventListener('keydown',function(e){if(e.key==='Enter')submit();});
+ show([h('h1',null,'Parent area'),h('div',{class:'card'},h('h2',null,'Sign in'),h('p',{class:'small'},'Grown-ups only. Type your parent PIN.'),pin,' ',go,m)]);
+ setTimeout(function(){try{pin.focus();}catch(e){}},0);}
+
+function load(){
+ show([h('h1',null,'Parent area'),h('div',{class:'card'},h('p',null,'Loading\u2026'))]);
+ authed({action:'overview'}).then(function(r){if(!r)return;
+  if(r.net){show([h('h1',null,'Parent area'),h('div',{class:'card'},h('p',{class:'msg'},'Cannot reach the server.'),h('button',{type:'button',onclick:load},'Try again'),' ',h('button',{type:'button',class:'gray',onclick:function(){endSession();}},'Sign out'))]);return;}
+  if(r.s!==200){endSession('Could not load. Please sign in again.');return;}
+  data=r.j;renderMain();});}
+
+/* ---------- helpers on the data ---------- */
+function kidData(n){return (data.kids||[]).filter(function(k){return k.name===n;})[0]||null;}
+function catBy(kind){var c=(data.catalog||[]).filter(function(x){return x.kind===kind;})[0];return c||null;}
+function skillLabel(kind){var c=catBy(kind);return c?c.skill_label:kind;}
+function topicList(subjectFilter){var seen={},out=[];(data.catalog||[]).forEach(function(c){if(subjectFilter&&c.subject!==subjectFilter)return;if(!seen[c.topic]){seen[c.topic]=1;out.push({topic:c.topic,label:c.topic_label,subject:c.subject});}});return out;}
+function gradeTopics(){var has={};(data.levelMap||[]).forEach(function(m){has[m.topic]=1;});return topicList().filter(function(t){return has[t.topic];});}
+function est(kd,topic,kind,grade){var r=(kd.grades||[]).filter(function(g){return g.topic===topic&&g.kind===kind&&Number(g.grade)===grade;})[0];
+ return r?{status:r.status,att:num(r.attempts_at_or_above),acc:num(r.accuracy_pct)}:{status:'collecting',att:0,acc:null};}
+function estCell(e){var t=e.status==='collecting'?'collecting ('+e.att+' of '+MIN_ATT+')':e.status+' '+Math.round(e.acc)+'% of '+e.att;
+ return h('span',{class:'est '+e.status.replace(' ',''),'data-status':e.status},t);}
+function lvName(l){return 'Level '+l+(LEVEL_NAMES[l-1]?' \u2013 '+LEVEL_NAMES[l-1]:'');}
+
+/* ---------- main page ---------- */
+function renderMain(){
+ var kd=kidData(curKid)||kidData(KIDS[0]);curKid=kd?kd.name:KIDS[0];
+ var tabs=h('div',{class:'tabs',id:'kidtabs'},KIDS.map(function(n){return h('button',{type:'button',id:'tab-'+n,class:n===curKid?'on':'',onclick:function(){curKid=n;renderMain();}},n);}));
+ var nodes=[
+  h('div',{class:'row'},h('h1',null,'Parent area'),h('div',null,h('span',{class:'small'},'Session ends in '),h('span',{class:'small',id:'sessleft'},Math.max(1,Math.ceil((expiresAt-Date.now())/60000))+' min'),' ',
+   h('button',{type:'button',class:'gray sm',id:'logout',onclick:function(){endSession('Signed out.');}},'Sign out'))),
+  h('p',{class:'small'},'Only for grown-ups. Everything here is sent by the server after you sign in; the kids\u2019 app has none of it.'),
+  tabs];
+ if(!kd||!kd.exists){nodes.push(h('div',{class:'card'},h('p',null,curKid+' has not created a PIN yet.')));}
+ else{nodes.push(summaryCard(kd),weakCard(kd),gradesCard(kd),topicsCard(kd),psychCard(kd),historyCard(kd),practiceCard(kd),biweeklyCard(kd),levelCard(kd));}
+ nodes.push(explainCard(),pinCard());
+ show(nodes);}
+
+function summaryCard(kd){
+ var s=kd.summary||{},p=kd.profile||{};
+ var age=p.has_profile?(kd.name+': age '+p.age_at_entry+' when answered (about '+p.age_now+' now, age band '+p.age_band+'); estimated grade from age (Sept 1 cutoff): grade '+p.est_grade_at_entry+'. Only the age and grade band are kept in reports; the birth month and year are stored privately on the server and are not shown here.'):'Birth month/year not entered yet (it is asked at the kid\u2019s next sign-in while online).';
+ return h('div',{class:'card',id:'summary'},h('h2',null,kd.name),
+  h('p',null,'Current algebra starting level: ',h('b',null,kd.level?lvName(kd.level):'\u2014'),'. Days played: '+(num(s.quizzes)||0)+(s.quizzes?'. Average: '+pctTxt(s.overall_avg_percent)+' (last 7 days: '+pctTxt(s.last7_avg_percent)+'). Last quiz: '+s.last_quiz+'.':'.')),
+  h('p',{class:'small',id:'pbirth'},age));}
+
+function weakCard(kd){
+ var items=(kd.weak||[]);
+ return h('div',{class:'card',id:'weak'},h('h2',null,'Skills to keep practicing'),
+  items.length?h('ul',null,items.map(function(w){return h('li',null,skillLabel(w.kind)+' \u2013 '+Math.round(Number(w.recent_miss_pct))+'% of the last answers missed ('+w.attempts+(Number(w.attempts)===1?' answer':' answers')+' in all)');})):h('p',{class:'small'},'Nothing stands out yet. A skill shows up here when it was missed in about a third or more of its last 10 answers.'),
+  h('p',{class:'small'},'The daily mix leans on these automatically.'));}
+
+function gradesCard(kd){
+ var rows=[];
+ gradeTopics().forEach(function(t){
+  rows.push(h('tr',{class:'tp'},h('td',null,h('b',null,t.label),' (all skills)'),h('td',null,estCell(est(kd,t.topic,'ALL',4))),h('td',null,estCell(est(kd,t.topic,'ALL',5)))));
+  (data.catalog||[]).filter(function(c){return c.topic===t.topic;}).forEach(function(c){
+   rows.push(h('tr',null,h('td',null,'\u00A0\u00A0'+c.skill_label),h('td',null,estCell(est(kd,t.topic,c.kind,4))),h('td',null,estCell(est(kd,t.topic,c.kind,5)))));});});
+ var maps={};(data.levelMap||[]).forEach(function(m){(maps[m.topic]=maps[m.topic]||[]).push('L'+m.level+'\u2248'+Number(m.grade_equiv));});
+ var mapTxt=gradeTopics().map(function(t){return t.label.split(':')[0]+': '+(maps[t.topic]||[]).join(' ');}).join('  |  ');
+ return h('div',{class:'card',id:'grades'},h('h2',null,'Estimated skill level vs. grade 4 and grade 5'),
+  h('p',{class:'small'},'This is an estimate from this app\u2019s own questions, NOT a state test (MCAS in Massachusetts, B.E.S.T./FAST in Florida), and it is never compared with other children. There is no ranking. The kids only ever see growth messages (\u201Cnew skill unlocked\u201D, \u201Cyou are getting faster\u201D); this honest view is for you.'),
+  h('div',{class:'tw'},h('table',{id:'gradetable'},h('tr',null,h('th',null,'Skill'),h('th',null,'Grade 4'),h('th',null,'Grade 5')),rows)),
+  h('p',{class:'small',id:'gradehow'},'How to read it: each level is mapped to the school grade its content roughly matches. For a grade, we look at the answers at that grade\u2019s level or higher: fewer than '+MIN_ATT+' answers = collecting (the numbers are answers so far out of the '+MIN_ATT+' needed); 75% or more right = on track (ahead if '+MIN_ATT+'+ answers at higher levels are also 75%+); otherwise approaching, which only means more practice at that level will get there. Level-to-grade mapping used \u2013 '+mapTxt+'.'),
+  h('p',{class:'small'},'Where the skills come from: English follows the spirit of the Massachusetts ELA Framework and Florida B.E.S.T. ELA standards for grades 3\u20136 (vocabulary, language conventions, reading informational/literary text, word study). Math follows number sense, fractions, multiplication facts and algebraic thinking in grades 3\u20136. No affiliation with either state, and no official scoring is implied.'));}
+
+function topicsCard(kd){
+ var rows=(kd.dashboard||[]).filter(function(d){return d.subject!=='psychology';}).map(function(d){
+  var lvl=d.topic==='algebra'?kd.level:(kd.topicLevels&&kd.topicLevels[d.topic]);
+  return h('tr',null,h('td',null,d.topic_label),h('td',null,lvl?String(lvl):'\u2014'),h('td',null,String(num(d.attempts)||0)),h('td',null,pctTxt(d.accuracy_pct)),h('td',null,String(num(d.practice_attempts)||0)),h('td',null,(num(d.skills_mastered)||0)+'/'+num(d.skills_total)));});
+ return h('div',{class:'card',id:'topics'},h('h2',null,'Topics'),
+  h('div',{class:'tw'},h('table',{id:'topictable'},h('tr',null,h('th',null,'Topic'),h('th',null,'Level'),h('th',null,'Answers'),h('th',null,'Right'),h('th',null,'Practice'),h('th',null,'Mastered')),rows)));}
+
+function psychCard(kd){
+ var rows=(kd.skills||[]).filter(function(s){return s.subject==='psychology';}).map(function(s){return h('tr',null,h('td',null,s.skill_label),h('td',null,String(num(s.attempts))),h('td',null,pctTxt(s.accuracy_pct)));});
+ return h('div',{class:'card',id:'psych'},h('h2',null,'Brain & feelings'),
+  h('div',{class:'tw'},h('table',{id:'psychtable'},h('tr',null,h('th',null,'Brain & feelings (not graded)'),h('th',null,'Answered'),h('th',null,'Right')),rows.length?rows:h('tr',null,h('td',{colspan:'3'},'No answers yet.')))));}
+
+function historyCard(kd){
+ var rows=(kd.history||[]).map(function(r){
+  var miss=r.missed_by_kind||{};var mt=Object.keys(miss).filter(function(k){return miss[k]>0;}).map(function(k){return skillLabel(k)+' ('+miss[k]+')';}).join(', ')||'\u2014';
+  return h('tr',null,h('td',null,r.date),h('td',null,String(r.level)),h('td',null,r.score+'/'+r.total),h('td',null,pctTxt(r.percent)),h('td',null,mt),
+   h('td',null,r.has_review?h('button',{type:'button',class:'sm','data-review':r.date,onclick:function(){openReview(kd.name,r.date);}},'Review'):'\u2014'));});
+ return h('div',{class:'card',id:'history'},h('h2',null,'Quiz history'),
+  rows.length?h('div',{class:'tw'},h('table',{id:'histtable'},h('tr',null,h('th',null,'Date'),h('th',null,'Start lvl'),h('th',null,'Score'),h('th',null,'%'),h('th',null,'Missed'),h('th',null,'')),rows)):h('p',{class:'small'},'No quizzes yet.'),
+  h('p',{class:'small'},'Each day\u2019s score is final and saved to the cloud under '+kd.name+'\u2019s name.'));}
+
+function practiceCard(kd){
+ var rows=(kd.practice||[]).map(function(p){return h('tr',null,h('td',null,p.day),h('td',null,p.topic),h('td',null,p.correct+'/'+p.questions),h('td',null,pctTxt(p.accuracy_pct)),h('td',null,String(p.start_level)+(p.top_level_cleared?' \u2192 cleared '+p.top_level_cleared:'')),
+  h('td',null,h('button',{type:'button',class:'sm','data-session':p.session_id,onclick:function(){openPractice(kd.name,p.session_id);}},'Details')));});
+ return h('div',{class:'card',id:'practice'},h('h2',null,'Practice sessions'),
+  rows.length?h('div',{class:'tw'},h('table',{id:'practicetable'},h('tr',null,h('th',null,'Day'),h('th',null,'Topic'),h('th',null,'Right'),h('th',null,'%'),h('th',null,'Levels'),h('th',null,'')),rows)):h('p',{class:'small'},'No practice yet.'),
+  h('p',{class:'small'},'Practice never changes the daily score or average, but every answer feeds tomorrow\u2019s mix.'));}
+
+function biweeklyCard(kd){
+ var rows=(kd.biweekly||[]).map(function(b){var t=(topicList().filter(function(x){return x.topic===b.topic;})[0]||{}).label||b.topic;return h('tr',null,h('td',null,b.period_start),h('td',null,t),h('td',null,String(num(b.attempts))),h('td',null,pctTxt(b.accuracy_pct)),h('td',null,String(num(b.days_active))));});
+ return h('div',{class:'card',id:'biweekly'},h('h2',null,'Progress by 2-week period'),
+  rows.length?h('div',{class:'tw'},h('table',{id:'biweeklytable'},h('tr',null,h('th',null,'Period starting'),h('th',null,'Topic'),h('th',null,'Answers'),h('th',null,'Right'),h('th',null,'Days'),),rows)):h('p',{class:'small'},'Not enough data yet.'));}
+
+function levelCard(kd){
+ var sel=h('select',{id:'lvlsel','aria-label':'Algebra starting level'},LEVEL_NAMES.map(function(n,i){var o=h('option',{value:String(i+1)},'Level '+(i+1)+' \u2013 '+n);if(i+1===kd.level)o.selected=true;return o;}));
+ var msg=h('div',{id:'levelmsg','aria-live':'polite'});
+ var b=h('button',{type:'button',id:'savelevel',onclick:function(){var lv=parseInt(sel.value,10);b.disabled=true;
+  authed({action:'set_level',kid:kd.name,level:lv}).then(function(r){b.disabled=false;if(!r)return;
+   if(r.s===200){kd.level=lv;msg.className='ok';msg.textContent='Saved. '+kd.name+'\u2019s next quiz starts at '+lvName(lv)+' (the app picks it up the next time it loads).';}
+   else{msg.className='msg';msg.textContent=r.net?'Cannot reach the server.':'Could not save the level.';}});}},'Save level');
+ return h('div',{class:'card',id:'levelcard'},h('h2',null,'Change the algebra starting level'),
+  h('p',{class:'small',id:'levelnote'},'This changes the algebra level for '+kd.name+'\u2019s next daily quiz. It is saved on the server and checked there; the kid\u2019s app picks it up the next time it loads while online.'),sel,' ',b,msg);}
+
+function explainCard(){
+ return h('div',{class:'card',id:'explain'},h('h2',null,'How it works'),
+  h('p',{class:'small',id:'levelhow'},'How levels work: 9\u201310 right \u2192 next day goes up a level. 7\u20138 \u2192 stay. 5\u20136 \u2192 stay and practice the missed question types. 4 or fewer \u2192 down one level. Inside a quiz, 3 right in a row makes questions harder and a miss makes the next one easier. The algebra level moves on the algebra questions only (scaled to 10, so one slip still levels up).'),
+  h('p',{class:'small',id:'mixnote'},'Daily mix: every daily quiz has 10 questions and the score is out of 10. Math is the main focus: 4 algebra + 1 other math (number sense, times tables or fractions) are always there. Then 3 English + 1 brain & feelings (psychology) question, and 1 flex question that goes to whichever topic needs it most. So a typical day is 5\u20136 math, 3\u20134 English and 1\u20132 brain questions, picked by who needs them most (recent misses, skills due for review, not yet mastered). The very first quiz is all algebra. Practice: the kid picks the topic (Math, English or How my brain works); it gets harder after 2 right in a row and easier after a miss, and 3 right above the current level unlocks that level for the daily quiz. Practice never changes the daily score or average, but every answer (daily or practice) feeds tomorrow\u2019s mix: missed skills come back after 1, 3 and 7 days, and a skill counts as Mastered after 3 right in a row across at least 2 sessions, then shows up less.'),
+  h('p',{class:'small',id:'pinnote'},'Parent: to reset a forgotten kid PIN or the parent PIN, or to correct a birth month/year, ask Kyle\u2019s assistant.'));}
+
+function pinCard(){
+ var cur=h('input',{id:'curpin',type:'password',inputmode:'numeric',autocomplete:'off',maxlength:'8','aria-label':'Current parent PIN',placeholder:'Current PIN'});
+ var n1=h('input',{id:'newpin',type:'password',inputmode:'numeric',autocomplete:'off',maxlength:'8','aria-label':'New parent PIN',placeholder:'New PIN (4\u20138 digits)'});
+ var n2=h('input',{id:'newpin2',type:'password',inputmode:'numeric',autocomplete:'off',maxlength:'8','aria-label':'New parent PIN again',placeholder:'New PIN again'});
+ var msg=h('div',{id:'chpinmsg','aria-live':'polite'});
+ var b=h('button',{type:'button',id:'chpinbtn',onclick:function(){
+  function bad(t){msg.className='msg';msg.textContent=t;}
+  if(!/^\d{4,8}$/.test(cur.value))return bad('Type your current PIN.');
+  if(!/^\d{4,8}$/.test(n1.value))return bad('The new PIN must be 4 to 8 digits.');
+  if(n1.value!==n2.value)return bad('The two new PINs do not match.');
+  if(n1.value===cur.value)return bad('The new PIN must be different.');
+  b.disabled=true;
+  authed({action:'change_pin',pin:cur.value,newPin:n1.value}).then(function(r){b.disabled=false;if(!r)return;
+   cur.value='';n1.value='';n2.value='';
+   if(r.s===200&&r.j.token){token=r.j.token;expiresAt=num(r.j.expiresAt)||Date.now()+30*60000;saveSession();msg.className='ok';msg.textContent='Parent PIN changed. Older sign-ins are now invalid.';}
+   else if(r.s===401)bad('The current PIN is not right.'+(typeof r.j.attemptsLeft==='number'?' '+r.j.attemptsLeft+' tries left before a lock.':''));
+   else if(r.s===429)bad('Too many wrong PINs. Try again later.');
+   else bad(r.net?'Cannot reach the server.':'Could not change the PIN.');});}},'Change parent PIN');
+ return h('div',{class:'card',id:'pincard'},h('h2',null,'Parent PIN'),
+  h('div',{class:'warn',id:'pinadvice'},'A 4-digit PIN is weak: there are only 10,000 possibilities. This page slows guessing down (5 wrong tries lock it for 15 minutes, then for longer each time), but a longer PIN (6\u20138 digits) is much safer. You can change it here any time.'),
+  h('p',null,cur,' ',n1,' ',n2),b,msg);}
+
+/* ---------- full quiz review ---------- */
+function backBar(){return h('div',{class:'row'},h('button',{type:'button',class:'gray',id:'backbtn',onclick:renderMain},'\u2190 Back'),h('button',{type:'button',class:'gray sm',onclick:function(){endSession('Signed out.');}},'Sign out'));}
+function openReview(kid,date){
+ show([backBar(),h('div',{class:'card'},h('p',null,'Loading\u2026'))]);
+ authed({action:'review',kid:kid,date:date}).then(function(r){if(!r)return;
+  if(r.s!==200){show([backBar(),h('div',{class:'card'},h('p',{class:'msg'},r.net?'Cannot reach the server.':'No saved review for that day.'))]);return;}
+  var j=r.j,qs=j.questions||[];
+  show([backBar(),h('div',{class:'card',id:'review'},h('h2',null,kid+' \u2013 '+j.date),h('p',null,'Start level '+j.level+' \u2192 '+(j.level_after||j.level)+'. Score '+j.score+'/'+j.total+' ('+pctTxt(j.percent)+').'),
+   qs.map(function(q){return h('div',{class:'q'},h('div',null,h('b',null,'#'+q.n+' '),(q.kind_label||skillLabel(q.kind))+' \u00B7 level '+q.level+' \u00B7 ',h('span',{class:q.correct?'yes':'no'},q.correct?'right':'missed')),
+    h('div',{class:'t'},q.text||''),h('div',{class:'small'},'Answered '+(q.answer?'True':'False')+'; the statement was '+(q.truth?'True':'False')+'.'));}))]);});}
+function openPractice(kid,sess){
+ show([backBar(),h('div',{class:'card'},h('p',null,'Loading\u2026'))]);
+ authed({action:'practice_session',kid:kid,session:sess}).then(function(r){if(!r)return;
+  if(r.s!==200){show([backBar(),h('div',{class:'card'},h('p',{class:'msg'},r.net?'Cannot reach the server.':'Not found.'))]);return;}
+  show([backBar(),h('div',{class:'card',id:'review'},h('h2',null,kid+' \u2013 practice'),r.j.questions.map(function(q){return h('div',{class:'q'},h('div',null,h('b',null,'#'+q.seq+' '),skillLabel(q.kind)+' \u00B7 level '+q.level+' \u00B7 ',h('span',{class:q.correct?'yes':'no'},q.correct?'right':'missed')),
+   h('div',{class:'t'},q.question_text||''),h('div',{class:'small'},'Answered '+(q.answered_true?'True':'False')+'; the statement was '+(q.truth?'True':'False')+'.'));}))]);});}
+
+/* ---------- start ---------- */
+(function init(){
+ var s=null;try{s=JSON.parse(sessionStorage.getItem(SS)||'null');}catch(e){}
+ if(s&&typeof s.t==='string'&&typeof s.e==='number'&&s.e>Date.now()){token=s.t;expiresAt=s.e;startTimer();load();}else renderLogin();})();
+})();
+</script>
+</body>
+</html>

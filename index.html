@@ -50,9 +50,6 @@ p{font-size:19px;line-height:1.45;margin:8px 0}
 .rev summary::-webkit-details-marker{display:none}
 .rev.ok summary{background:#e6fff6}.rev.no summary{background:#fff3e0}
 .rev .inner{padding:4px 12px 12px}
-.parent{color:#fff;margin-top:26px}
-.parent summary{cursor:pointer;font-weight:800;text-align:center;font-size:16px;opacity:.9;padding:10px}
-.parent .card{color:#2d2a4a}
 table{width:100%;border-collapse:collapse;font-size:15px}
 th,td{padding:6px 5px;border-bottom:1px solid #eee;text-align:left;vertical-align:top}
 select{font:inherit;font-size:18px;padding:10px;border-radius:12px;border:2px solid #a29bfe}
@@ -106,10 +103,6 @@ select{font:inherit;font-size:18px;padding:10px;border-radius:12px;border:2px so
 .grp{font-size:20px;font-weight:900;margin:16px 0 2px;color:#4834d4}
 .grow{border:3px solid #d9f7ec;border-radius:18px;padding:10px 12px;margin:10px 0;background:#f5fffb}
 .grow .l1{font-weight:900;font-size:19px}
-.gate{background:#f6f4ff;border:3px dashed #a29bfe;border-radius:18px;padding:10px 12px;margin:12px 0}
-.gate input{font:inherit;font-size:20px;width:90px;padding:8px;border-radius:12px;border:2px solid #a29bfe;margin:0 8px}
-.est{display:inline-block;border-radius:99px;padding:2px 10px;font-weight:800;font-size:14px}
-.est.collecting{background:#f1f2ff}.est.approaching{background:#fff3cd}.est.ontrack{background:#d9f7ec}.est.ahead{background:#e8e6ff}
 .birth select{width:100%;margin:8px 0}
 </style>
 </head>
@@ -1827,7 +1820,7 @@ function applyOutcome(S,o){
  var info=TP.catalog[o.kind];if(!info)return null;
  var sk=skillOf(S,o.kind),tp=topicOf(S,info.topic),prac=o.mode==='practice',ok=!!o.correct,sid=o.sid||'';
  if(prac){sk.pa++;if(ok)sk.pc++;tp.pa++;if(ok)tp.pc++;}else{sk.a++;if(ok)sk.c++;}
- /* per-level tally [attempts, correct] (daily + practice), used for the parent-only grade-level estimate */
+ /* per-level tally [attempts, correct] (daily + practice), kept for the server-side skill-level reports */
  if(!sk.l)sk.l=[];var li=Math.max(1,Math.min(12,o.level|0))-1;while(sk.l.length<=li)sk.l.push([0,0]);sk.l[li]=[sk.l[li][0]+1,sk.l[li][1]+(ok?1:0)];
  sk.r=(sk.r+(ok?'1':'0')).slice(-RECENT);sk.ls=o.date||sk.ls;
  if(ok){
@@ -1945,24 +1938,6 @@ function backfillLevels(S,history,unpack){
   (qs||[]).forEach(function(q){if(q.userAnswer===undefined||!need[q.kind])return;var L=need[q.kind],i=Math.max(1,Math.min(12,q.level|0))-1;
    while(L.length<=i)L.push([0,0]);L[i][0]++;if(q.userAnswer===q.truth)L[i][1]++;});});
  for(var k2 in need)S.skills[k2].l=need[k2];return true;}
-/* ---------- parent-only grade-level estimate (an estimate from THIS app, not a state test) ----------
-   A level maps to a grade equivalent (registry gradeEq). For grade g, the "target level" T(g) is the lowest level whose grade equivalent is >= g.
-   Evidence = attempts at levels >= T(g). Fewer than 5 attempts -> 'collecting'; >=75% correct -> 'on track' (and 'ahead' when 5+ attempts at levels above T(g) are also >=75%); else 'approaching'. There is deliberately no 'behind' label. */
-var GR={minAttempts:5,ok:0.75};
-function targetLevel(topic,g){var ge=TP.registry[topic].gradeEq;if(!ge)return null;for(var i=0;i<ge.length;i++)if(ge[i]>=g)return i+1;return ge.length;}
-function estimateFrom(l,topic,g){
- var T=targetLevel(topic,g);if(!T)return null;var a=0,c=0,ua=0,uc=0;(l||[]).forEach(function(p,i){if(i+1>=T){a+=p[0];c+=p[1];}if(i+1>T){ua+=p[0];uc+=p[1];}});
- var res={target:T,att:a,cor:c,acc:a?c/a:0,status:'collecting'};
- if(a<GR.minAttempts)return res;
- if(c/a>=GR.ok){res.status=(ua>=GR.minAttempts&&uc/ua>=GR.ok)?'ahead':'on track';}else res.status='approaching';
- return res;}
-function gradeReport(S,topic){
- var T=TP.registry[topic];if(!T.gradeEq)return null;var out={topic:topic,name:T.name,skills:[],all:[]},sum=[];
- T.skills.forEach(function(sd){var sk=S.skills&&S.skills[sd.id],l=(sk&&sk.l)||[];
-  l.forEach(function(p,i){if(!sum[i])sum[i]=[0,0];sum[i][0]+=p[0];sum[i][1]+=p[1];});
-  out.skills.push({id:sd.id,label:sd.label,g4:estimateFrom(l,topic,4),g5:estimateFrom(l,topic,5)});});
- for(var i=0;i<sum.length;i++)if(!sum[i])sum[i]=[0,0];
- out.g4=estimateFrom(sum,topic,4);out.g5=estimateFrom(sum,topic,5);return out;}
 /* growth summary for kid-facing, strength-based messages. history: daily results; unpack gives questions. Compares the last 14 days with before. */
 function growth(history,unpack,today){
  var best=0,played=0,answered=0,by={};
@@ -1975,7 +1950,7 @@ function growth(history,unpack,today){
 function adaptBlob(S){ensure(S);return {skills:S.skills,topics:S.topics};}
 return {GAPS:GAPS,days:days,newSkill:newSkill,newTopic:newTopic,skillOf:skillOf,topicOf:topicOf,isDue:isDue,isMastered:isMastered,workLevel:workLevel,setWorkLevel:setWorkLevel,unlockedMax:unlockedMax,
  applyOutcome:applyOutcome,skillWeight:skillWeight,kindWeights:kindWeights,allWeights:allWeights,topicWeight:topicWeight,planDaily:planDaily,slotLevel:slotLevel,slotSeed:slotSeed,algebraNextDay:algebraNextDay,
- startPractice:startPractice,answerPractice:answerPractice,practiceWeights:practiceWeights,badge:badge,topicSummary:topicSummary,weakest:weakest,seedFromHistory:seedFromHistory,adaptBlob:adaptBlob,DAILY:DAILY,startLevel:startLevel,backfillLevels:backfillLevels,gradeReport:gradeReport,estimateFrom:estimateFrom,targetLevel:targetLevel,growth:growth,GR:GR};
+ startPractice:startPractice,answerPractice:answerPractice,practiceWeights:practiceWeights,badge:badge,topicSummary:topicSummary,weakest:weakest,seedFromHistory:seedFromHistory,adaptBlob:adaptBlob,DAILY:DAILY,startLevel:startLevel,backfillLevels:backfillLevels,growth:growth};
 })();
 if(typeof module!=='undefined')module.exports=Engine;
 
@@ -1993,7 +1968,7 @@ var skew=0;
 function nyKey(ms){try{var p=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(ms));if(/^\d{4}-\d{2}-\d{2}$/.test(p))return p;}catch(e){}return G.dateKey(new Date(ms));}
 function today(){return nyKey(Date.now()+skew);}
 /* ---------- storage: the server is the source of truth; localStorage is a per-kid offline cache ---------- */
-var kid=null,token=null,pending=[],memCache={},profile=null,parentOpen=false; /* profile = {age,grade} from the server once the birth month/year has been entered (the month/year themselves stay on the server) */
+var kid=null,token=null,pending=[],memCache={},profile=null; /* profile = {age,grade} from the server once the birth month/year has been entered (the month/year themselves stay on the server) */
 var SCHEMA=2;
 function blank(){return {v:SCHEMA,level:1,history:[],inProgress:null,skills:{},topics:{}};}
 function pct(r){return r.total?Math.round(100*r.score/r.total):0;}
@@ -2107,55 +2082,6 @@ function dayStreak(){var d=today(),n=0,dates={};store.history.forEach(function(r
  while(dates[G.dateKey(cur)]){n++;cur.setDate(cur.getDate()-1);}return n;}
 function logoutBtn(){return btn('\uD83D\uDD04 Switch kid / log out','gray',logout,'logout');}
 var SUBJ_TITLE={math:'\uD83D\uDD22 Math',english:'\uD83D\uDCDA English',psychology:'\uD83E\uDDE0 How my brain works'};
-var STAT_TXT={collecting:'collecting data',approaching:'approaching','on track':'on track',ahead:'ahead'};
-function estCell(e){if(!e)return h('span',null,'\u2014');
- var t=e.status==='collecting'?'collecting data ('+e.att+' of '+Engine.GR.minAttempts+' answers)':STAT_TXT[e.status]+' ('+Math.round(100*e.acc)+'% of '+e.att+')';
- return h('span',{class:'est '+e.status.replace(' ',''),'data-status':e.status},t);}
-function newGate(){var a=6+Math.floor(Math.random()*4),b=6+Math.floor(Math.random()*4),c=3+Math.floor(Math.random()*7);return {q:'What is '+a+' \u00D7 '+b+' + '+c+'?',a:a*b+c};}
-/* PARENT-ONLY view: estimates against grade 4 and grade 5 expectations. Behind a soft gate (a grown-up arithmetic question); NOT security, only keeps young kids from wandering in. */
-function parentView(){
- var rows=[];['algebra','numsense','facts','fractions','english'].forEach(function(t){var gr=Engine.gradeReport(store,t);if(!gr)return;
-  rows.push(h('tr',{class:'tp'},h('td',null,h('b',null,Topics.registry[t].short),' (all skills)'),h('td',null,estCell(gr.g4)),h('td',null,estCell(gr.g5))));
-  gr.skills.forEach(function(sk){rows.push(h('tr',null,h('td',null,'\u00A0\u00A0'+sk.label),h('td',null,estCell(sk.g4)),h('td',null,estCell(sk.g5))));});});
- var g=Engine.growth(store.history,questionsOf,today());
- var ps=Topics.registry.psych.skills.map(function(sd){var sk=store.skills[sd.id]||{a:0,c:0,pa:0,pc:0};return h('tr',null,h('td',null,sd.label),h('td',null,String(sk.a+sk.pa)),h('td',null,(sk.a+sk.pa)?Math.round(100*(sk.c+sk.pc)/(sk.a+sk.pa))+'%':'\u2014'));});
- var maps=['algebra','numsense','facts','fractions','english'].map(function(t){return Topics.registry[t].short+': '+Topics.registry[t].gradeEq.map(function(x,i){return 'L'+(i+1)+'\u2248'+x;}).join(' ');}).join('  |  ');
- return h('div',{id:'pview'},
-  h('h3',null,'\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC66 Parent-only view'),
-  h('p',{class:'small',id:'pbirth'},profile?(kid+': age '+profile.age+' when answered; estimated grade from age (Sept 1 cutoff): grade '+profile.grade+'. Only the age and grade band are kept in reports. The birth month and year are stored privately on the server; to change them, ask Kyle\u2019s assistant.'):'Birth month/year not entered yet (it is asked at the next sign-in while online).'),
-  h('p',{class:'small'},'Estimated skill level vs. grade 4 and grade 5 expectations. This is an estimate from this app\u2019s own questions, NOT a state test (MCAS in Massachusetts, B.E.S.T./FAST in Florida), and it is never compared with other children. There is no ranking.'),
-  h('table',{id:'gradetable'},h('tr',null,h('th',null,'Skill'),h('th',null,'Grade 4'),h('th',null,'Grade 5')),rows),
-  h('p',{class:'small'},'How to read it: each level is mapped to the school grade its content roughly matches. For a grade, we look at the answers at that grade\u2019s level or higher: fewer than 5 answers = collecting data; 75% or more right = on track (ahead if 5+ answers at higher levels are also 75%+); otherwise approaching, meaning more practice will get there. Mapping used \u2013 '+maps+'.'),
-  h('p',{class:'small'},'Where the skills come from: English follows the spirit of the Massachusetts ELA Framework and Florida B.E.S.T. ELA standards for grades 3\u20136 (vocabulary, language conventions, reading informational/literary text, word study). Math follows number sense, fractions, multiplication facts and algebraic thinking in grades 3\u20136. No affiliation with either state, and no official scoring is implied.'),
-  h('table',{id:'psychtable'},h('tr',null,h('th',null,'Brain & feelings (not graded)'),h('th',null,'Answered'),h('th',null,'Right')),ps),
-  h('p',{class:'small'},'Played '+g.played+' daily '+(g.played===1?'quiz':'quizzes')+', best '+g.best+'/10, '+g.answered+' daily answers on record. A future version could add a PIN-protected parent mode in place of this soft gate.'));}
-function parentGate(){
- var box=h('div',{id:'pgatebox'});
- function paint(msg){box.innerHTML='';
-  if(parentOpen){box.appendChild(parentView());box.appendChild(btn('\uD83D\uDD12 Hide parent view','gray',function(){parentOpen=false;paint();},'pgatehide'));return;}
-  var gt=newGate();
-  var inp=h('input',{id:'pgateans',type:'text',inputmode:'numeric',autocomplete:'off','aria-label':'answer'});
-  box.appendChild(h('div',{class:'gate'},h('p',{class:'small',style:'margin:0 0 6px'},'\uD83D\uDD10 Grown-ups only: skill estimates vs. grade level. Answer to open:'),
-   h('span',{id:'pgateq',style:'font-weight:900'},gt.q),inp,
-   h('button',{type:'button',class:'btn blue',id:'pgatego',style:'display:inline-block;width:auto;min-height:48px;padding:8px 18px;font-size:18px',onclick:function(){if(parseInt(inp.value,10)===gt.a){parentOpen=true;paint();}else paint('Not quite \u2013 here is a new one.');}},'Open'),
-   msg?h('p',{class:'small',id:'pgatemsg'},msg):null));}
- paint();return box;}
-function parentCorner(){
- var rows=store.history.slice().reverse().map(function(r){return h('tr',null,h('td',null,r.date),h('td',null,String(r.startLevel)),h('td',null,r.score+'/'+r.total),h('td',null,pct(r)+'%'),
-  h('td',null,Object.keys(r.missed||{}).map(function(k){return kl(k)+' ('+r.missed[k]+')';}).join(', ')||'\u2014'));});
- var sel=h('select',{id:'lvlsel'},G.LEVEL_NAMES.map(function(n,i){var o=h('option',{value:String(i+1)},'Level '+(i+1)+' \u2013 '+n);if(i+1===store.level)o.selected=true;return o;}));
- return h('details',{class:'parent'},h('summary',null,'\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC66 Parent corner'),
-  h('div',{class:'card'},
-   h('p',null,(kid?kid+': ':'')+'current algebra level: '+lvName(store.level)+'. Days played: '+store.history.length+(store.history.length?'. Average: '+avgPct()+'%.':'.')),
-   rows.length?h('table',null,h('tr',null,h('th',null,'Date'),h('th',null,'Start lvl'),h('th',null,'Score'),h('th',null,'%'),h('th',null,'Missed')),rows):h('p',{class:'small'},'No quizzes yet.'),
-   h('p',{class:'small'},'How levels work: 9\u201310 right \u2192 next day goes up a level. 7\u20138 \u2192 stay. 5\u20136 \u2192 stay and practice the missed question types. 4 or fewer \u2192 down one level. Inside a quiz, 3 right in a row makes questions harder and a miss makes the next one easier. The algebra level moves on the algebra questions only (scaled to 10, so one slip still levels up). Each day\u2019s score is final and saved to the cloud under '+(kid||'the kid')+'\u2019s name.'),
-   h('p',{class:'small',id:'mixnote'},'Daily mix: every daily quiz has 10 questions and the score is out of 10. Math is the main focus: 4 algebra + 1 other math (number sense, times tables or fractions) are always there. Then 3 English + 1 brain & feelings (psychology) question, and 1 flex question that goes to whichever topic needs it most. So a typical day is 5\u20136 math, 3\u20134 English and 1\u20132 brain questions, picked by who needs them most (recent misses, skills due for review, not yet mastered). The very first quiz is all algebra. Practice: your kid picks the topic (Math, English or How my brain works); it gets harder after 2 right in a row and easier after a miss, and 3 right above the current level unlocks that level for the daily quiz. Practice never changes the daily score or average, but every answer (daily or practice) feeds tomorrow\u2019s mix: missed skills come back after 1, 3 and 7 days, and a skill counts as Mastered after 3 right in a row across at least 2 sessions, then shows up less.'),
-   h('table',{id:'topictable'},h('tr',null,h('th',null,'Topic'),h('th',null,'Level'),h('th',null,'Practiced'),h('th',null,'Right'),h('th',null,'Mastered')),
-    Topics.order.map(function(t){var r=Engine.topicSummary(store,t,today());return h('tr',null,h('td',null,r.short),h('td',null,String(r.work)),h('td',null,String(r.pa)),h('td',null,r.pa?Math.round(100*r.pc/r.pa)+'%':'\u2014'),h('td',null,r.mastered+'/'+r.total));})),
-   parentGate(),
-   h('p',null,'Change the algebra starting level for the next quiz:'),sel,
-   btn('Save level','blue',function(){store.level=parseInt(document.getElementById('lvlsel').value,10);save();enqueue({level:store.level},0);render();}),
-   h('p',{class:'small',id:'pinnote'},'Parent: to reset a forgotten PIN or correct a birth month/year, ask Kyle\u2019s assistant.')));}
 /* ---------- quiz engine ---------- */
 var Q=null,batchSize=5;
 function recentTexts(){var out=[];store.history.slice(-3).forEach(function(r){(r.texts||[]).forEach(function(t){out.push(t);});});return out;}
@@ -2360,7 +2286,7 @@ function renderResults(rec,mode){
    btn('\uD83D\uDCAA Practice more','alt',renderPracticeHome,'practicemore'),
    histBtn(),
    mode!=='daily'?btn('\u2B05 Back to home','gray',render):null),
-  logoutBtn(),parentCorner()];
+  logoutBtn()];
  show(nodes);}
 function todayRec(){var r=recFor(today());return r&&questionsOf(r)?r:null;}
 
@@ -2485,7 +2411,7 @@ function keypad(onDone){
  nextKH=function(e){if(/^\d$/.test(e.key))press(e.key);else if(e.key==='Backspace')back();};
  return h('div',null,dots,h('div',{class:'pad'},keys));}
 function renderPicker(msg){
- Q=null;kid=null;token=null;pending=[];store=blank();profile=null;parentOpen=false;setSync('');
+ Q=null;kid=null;token=null;pending=[];store=blank();profile=null;setSync('');
  show([h('h1',null,'\uD83E\uDDE0 Daily Brain Quiz'),h('div',{class:'sub'},'Math, English & how your brain works!'),
   h('div',{class:'card pop'},h('h2',{style:'text-align:center'},'Who\u2019s playing today?'),
    msg?h('div',{class:'msg',id:'pickmsg'},msg):null,
@@ -2601,7 +2527,7 @@ function render(){
  var ip=store.inProgress;
  if(ip&&ip.date===today()&&ip.answers&&ip.answers.length>0){
   show([h('h1',null,'Daily Brain Quiz'),h('div',{class:'card pop'},h('h2',null,'Welcome back, '+kid+'! \uD83D\uDC4B'),h('p',null,'You\u2019re on question '+(ip.answers.length+1)+' of '+TOTAL+'.'),
-   btn('Keep going \u25B6','go',resumeDaily,'resume'),histBtn()),logoutBtn(),parentCorner()]);return;}
+   btn('Keep going \u25B6','go',resumeDaily,'resume'),histBtn()),logoutBtn()]);return;}
  var first=isFirst(),f=focusSkills(2),ds=dayStreak();
  show([h('h1',null,'\uD83E\uDDE0 Daily Brain Quiz'),h('div',{class:'sub',id:'whoami'},'Hi '+kid+'! \uD83D\uDC4B'),
   h('div',{class:'card pop'},
@@ -2611,7 +2537,7 @@ function render(){
    (!first&&f.length)?h('p',{class:'small'},'\uD83C\uDFAF Extra practice today on: '+f.join(', ')):null,
    h('div',{class:'tip'},'Example: If M = 49, is M \u00F7 7 = 7 true? Plug it in: 49 \u00F7 7 = 7. Yes, TRUE!'),
    btn('Start today\u2019s quiz \u25B6','go',renderReminder,'start'),btn('\uD83D\uDCAA Practice a topic','alt',renderPracticeHome,'practicebtn'),store.history.length?histBtn():null),
-  logoutBtn(),parentCorner()]);}
+  logoutBtn()]);}
 document.addEventListener('visibilitychange',function(){if(!document.hidden&&kid&&!Q&&token){flush().then(function(){if(!pending.length&&!Q)resync(false);});}});
 /* ---------- boot: resume this tab's session, otherwise ask who is playing ---------- */
 (function boot(){
