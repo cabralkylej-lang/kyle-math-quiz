@@ -82,6 +82,19 @@ select{font:inherit;font-size:18px;padding:10px;border-radius:12px;border:2px so
 .key:active{transform:translateY(4px);box-shadow:0 1px 0 rgba(108,92,231,.25)}
 .weak{border:3px solid #ffe3e3;border-radius:18px;padding:10px 12px;margin:10px 0}
 .weak .l1{display:flex;justify-content:space-between;gap:8px;font-weight:900;font-size:19px}.weak .progress{height:12px;margin:8px 0 4px}
+.eq.txt{font-size:clamp(20px,5.6vw,28px);letter-spacing:0;line-height:1.35;font-weight:800}
+.tag{text-align:center;font-weight:800;font-size:15px;color:#6c5ce7;margin:6px 0 0}
+.btn.topic{display:flex;align-items:center;gap:12px;text-align:left;background:#fff;color:#2d2a4a;border:3px solid #e8e6ff;box-shadow:0 4px 0 rgba(108,92,231,.18);font-weight:700}
+.btn.topic .te{font-size:34px}.btn.topic .tt{display:flex;flex-direction:column;gap:2px;font-size:17px}.btn.topic small{font-size:14px;font-weight:600;color:#636e72}
+.segs{display:flex;gap:10px;justify-content:center;margin:6px 0 12px}
+.seg{font:inherit;font-weight:800;border:3px solid #a29bfe;background:#fff;color:#4834d4;border-radius:99px;padding:8px 16px;cursor:pointer}
+.seg.on{background:#6c5ce7;color:#fff;border-color:#6c5ce7}
+.ptopic{border:3px solid #e8e6ff;border-radius:18px;padding:10px 12px;margin:10px 0}
+.ptopic .l1{display:flex;justify-content:space-between;gap:8px;font-weight:900;font-size:19px}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.sb{font-size:13px;font-weight:700;border-radius:99px;padding:4px 10px;background:#f1f2ff;color:#2d2a4a}
+.sb.mastered{background:#fff3c4}.sb.strong{background:#d9f7ec}.sb.growing{background:#e8e6ff}
+.lvnote{font-weight:800;color:#4834d4}
 .legend{text-align:center;margin:0 0 6px}
 </style>
 </head>
@@ -94,7 +107,7 @@ var QuizGen=(function(){
 var MINUS='\u2212',TIMES='\u00d7',DIV='\u00f7';
 var PREC={'+':1,'\u2212':1,'\u00d7':2,'\u00f7':2};
 var KIND_LABELS={addsub:'Adding & subtracting',muldiv:'Multiplying & dividing',twostep:'Two-step puzzles',parens:'Parentheses',both:'Mystery number on both sides',order:'Order of operations',multi:'Multi-step challenges'};
-var LEVEL_NAMES=['Number Newbie','Times-Table Tiger','Number Ninja','Puzzle Solver','Equation Explorer','Brain Builder','Balance Master','Parentheses Pro','Algebra Ace','Math Wizard'];
+var LEVEL_NAMES=['Number Newbie','Times-Table Tiger','Number Ninja','Puzzle Solver','Equation Explorer','Brain Builder','Balance Master','Parentheses Pro','Algebra Ace','Math Wizard','Challenge Champ','Math Legend'];
 var POOLS={
  1:[['addsub',0]],
  2:[['muldiv',0]],
@@ -105,7 +118,10 @@ var POOLS={
  7:[['both',1],['parens',1]],
  8:[['multi',0],['order',1],['twostep',2]],
  9:[['both',2],['multi',1]],
- 10:[['both',3],['multi',2],['order',1]]
+ 10:[['both',3],['multi',2],['order',1]],
+ /* 11-12: bonus levels, reachable in Practice only (the daily quiz stays on levels 1-10) */
+ 11:[['both',3],['multi',3]],
+ 12:[['both',3],['multi',3],['twostep',3],['order',2]]
 };
 /* ---------- random ---------- */
 function hashSeed(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}
@@ -196,7 +212,7 @@ function kMuldiv(r,t){var a,s,q,T,L,v;
   else if(v===3){a=ri(r,2,12);q=ri(r,2,15);s=a*q;L=B(DIV,V(),N(a));T=q;}
   else{T=ri(r,2,12);s=ri(r,2,12);L=B(DIV,N(T*s),V());}}
  return {L:L,R:N(T),s:s};}
-function kTwostep(r,t){var sMax=[10,20,30][t],bMax=[9,30,60][t],aMax=[6,9,12][t];
+function kTwostep(r,t){var sMax=[10,20,30,45][t],bMax=[9,30,60,99][t],aMax=[6,9,12,15][t];
  var v=ri(r,1,t===0?3:6),a,s,b,T,L,q;
  if(v===1){a=ri(r,2,aMax);s=ri(r,1,sMax);b=ri(r,1,bMax);T=a*s+b;L=B('+',term(r,a),N(b));}
  else if(v===2){a=ri(r,2,aMax);s=ri(r,2,sMax);b=ri(r,1,Math.min(bMax,a*s-1));T=a*s-b;L=B(MINUS,term(r,a),N(b));}
@@ -234,15 +250,15 @@ function kBoth(r,t,vn){var a,b,c,d,s,k,L,R,pre=null,lin;
   pre=['The left side is divided by '+c+'. Multiply BOTH sides by '+c+' to cancel it:  '+xs(a,vn)+' + '+b+' = '+c+' '+TIMES+' ('+vn+' + '+d3+') = '+xs(c,vn)+' + '+(c*d3)+'.'];}
  var ll=linLines(lin,vn,pre);
  return {L:L,R:R,s:s,custom:ll,noFlip:true};}
-function kOrder(r,t){var big=t>=1,a,b,c,s,T,L,q,v=ri(r,1,t===0?3:5);
- a=ri(r,big?3:2,big?12:9);b=ri(r,big?3:2,big?12:9);
- if(v===1){s=ri(r,1,big?40:15);T=s+a*b;L=B('+',V(),B(TIMES,N(a),N(b)));}
+function kOrder(r,t){var big=t>=1,huge=t>=2,a,b,c,s,T,L,q,v=ri(r,1,t===0?3:5);
+ a=ri(r,big?3:2,huge?15:big?12:9);b=ri(r,big?3:2,huge?15:big?12:9);
+ if(v===1){s=ri(r,1,huge?90:big?40:15);T=s+a*b;L=B('+',V(),B(TIMES,N(a),N(b)));}
  else if(v===2){s=ri(r,1,a*b-1);T=a*b-s;L=B(MINUS,B(TIMES,N(a),N(b)),V());}
  else if(v===3){c=ri(r,2,9);s=ri(r,1,big?15:9);var c2=ri(r,2,big?9:6);T=c*s+a*c2;L=B('+',B(TIMES,V(),N(c)),B(TIMES,N(a),N(c2)));}
  else if(v===4){c=ri(r,2,9);q=ri(r,2,big?12:8);s=c*q;var c3=ri(r,2,big?9:6);T=q+a*c3;L=B('+',B(DIV,V(),N(c),true),B(TIMES,N(a),N(c3)));}
  else{s=ri(r,2,big?15:9);T=(a+b)*s;L=B(TIMES,B('+',N(a),N(b),true),V());}
  return {L:L,R:N(T),s:s};}
-function kMulti(r,t){var aMax=[6,9,12][t],sMax=[10,15,25][t],v=ri(r,1,t===0?3:4),a,b,c,s,T,L,q;
+function kMulti(r,t){var aMax=[6,9,12,15][t],sMax=[10,15,25,40][t],v=ri(r,1,t===0?3:4),a,b,c,s,T,L,q;
  if(v===1){a=ri(r,2,aMax);b=ri(r,1,9+t*5);s=ri(r,1,sMax);var base=a*(s+b);c=ri(r,1,Math.min(30,base-1));T=base-c;L=B(MINUS,B(TIMES,N(a),B('+',V(),N(b))),N(c));}
  else if(v===2){a=ri(r,2,aMax);q=ri(r,2,t?12:8);b=ri(r,1,9);c=ri(r,2,t?9:6);s=a*q;T=(q+b)*c;L=B(TIMES,B('+',B(DIV,V(),N(a),true),N(b)),N(c));}
  else if(v===3){a=ri(r,2,aMax);s=ri(r,2,sMax);c=ri(r,2,Math.min(6,a*s-1));T=ri(r,1,Math.floor((a*s-1)/c));b=a*s-c*T;L=B(DIV,B(MINUS,term(r,a),N(b)),N(c));}
@@ -250,12 +266,16 @@ function kMulti(r,t){var aMax=[6,9,12][t],sMax=[10,15,25][t],v=ri(r,1,t===0?3:4)
  return {L:L,R:N(T),s:s};}
 var BUILD={addsub:kAddsub,muldiv:kMuldiv,twostep:kTwostep,parens:kParens,both:kBoth,order:kOrder,multi:kMulti};
 /* ---------- pool selection ---------- */
-function poolFor(level,miss){var out=[],kinds={},i,e;
+function poolFor(level,miss,wt){var out=[],kinds={},i,e;
  var p=POOLS[level];
- for(i=0;i<p.length;i++){e=p[i];kinds[e[0]]=1;out.push({kind:e[0],tier:e[1],w:1+Math.min(9,3*(miss&&miss[e[0]]||0))});}
- if(miss){for(var k in miss){if(!miss[k]||kinds[k])continue;
+ for(i=0;i<p.length;i++){e=p[i];kinds[e[0]]=1;
+  out.push({kind:e[0],tier:e[1],w:wt?Math.max(0.05,wt[e[0]]!=null?wt[e[0]]:1):1+Math.min(9,3*(miss&&miss[e[0]]||0))});}
+ /* review: a lower-level kind that is weak or due for spaced repetition comes back at higher levels */
+ var rv=wt||miss;
+ if(rv){for(var k in rv){if(kinds[k]||!BUILD[k])continue;
+   var need=wt?(wt[k]>=2):(rv[k]>0);if(!need)continue;
    for(var l=level-1;l>=1;l--){var q=POOLS[l],found=null;for(i=0;i<q.length;i++)if(q[i][0]===k)found=q[i];
-    if(found){out.push({kind:k,tier:found[1],w:Math.min(4,miss[k])});break;}}}}
+    if(found){out.push({kind:k,tier:found[1],w:wt?Math.min(4,wt[k]-0.5):Math.min(4,miss[k])});break;}}}}
  return out;}
 function pickWeighted(r,list){var tot=0,i;for(i=0;i<list.length;i++)tot+=list[i].w;var x=r()*tot;
  for(i=0;i<list.length;i++){x-=list[i].w;if(x<0)return list[i];}return list[list.length-1];}
@@ -276,7 +296,7 @@ var LETTERS='abcdefghkmnpqrstwxyz';
 function makeQuestion(o){var level=o.level;
  for(var attempt=0;attempt<60;attempt++){
   var r=rngFromSeed(o.seed+(attempt?'#'+attempt:''));
-  var ent=pickWeighted(r,poolFor(level,o.miss));
+  var ent=pickWeighted(r,poolFor(level,o.miss,o.weights));
   var letter=LETTERS.charAt(ri(r,0,LETTERS.length-1));var vn=r()<0.4?letter.toUpperCase():letter;
   var eq=BUILD[ent.kind](r,ent.tier,vn);var L=eq.L,R=eq.R,s=eq.s;
   if(evalN(L,s)===null||evalN(L,s)!==evalN(R,s))continue;
@@ -371,11 +391,512 @@ return {makeQuestion:makeQuestion,schedule:schedule,nextQuestionLevel:nextQuesti
 })();
 if(typeof module!=='undefined')module.exports=QuizGen;
 
+var Topics=(function(){
+'use strict';
+var QG=(typeof QuizGen!=='undefined')?QuizGen:require('./gen.js');
+var TIMES='\u00d7',DIV='\u00f7',MINUS='\u2212';
+var rngFromSeed=QG.rngFromSeed;
+function ri(r,a,b){return a+Math.floor(r()*(b-a+1));}
+function pick(r,a){return a[Math.floor(r()*a.length)];}
+function shuffle(r,a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(r()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
+function fmt(n){var s=String(Math.abs(n)),o='';while(s.length>3){o=','+s.slice(-3)+o;s=s.slice(0,-3);}return (n<0?'-':'')+s+o;}
+function p10(e){var x=1;while(e-->0)x*=10;return x;}
+function gcd(a,b){while(b){var t=a%b;a=b;b=t;}return a;}
+function lcm(a,b){return a/gcd(a,b)*b;}
+function pickWeighted(r,list){var tot=0,i;for(i=0;i<list.length;i++)tot+=list[i].w;var x=r()*tot;
+ for(i=0;i<list.length;i++){x-=list[i].w;if(x<0)return list[i];}return list[list.length-1];}
+function uniq(a){var o=[];a.forEach(function(x){if(o.indexOf(x)<0)o.push(x);});return o;}
+function sec(t,h,l){return {t:t,h:h,l:l};}
+
+/* =====================================================================
+   TOPIC: NUMBER SENSE  (place value, rounding, comparing / expanded form)
+   ===================================================================== */
+var PLACES=['ones','tens','hundreds','thousands','ten thousands','hundred thousands','millions'];
+var ROUND_NAMES=['one','ten','hundred','thousand','ten thousand','hundred thousand','million'];
+var NS_LEN=[3,4,5,6,7];
+function digitsOf(n){return String(n).split('').map(Number);}
+function distinctNum(r,len){var d=shuffle(r,[0,1,2,3,4,5,6,7,8,9]);if(d[0]===0){var j=1;while(d[j]===0)j++;var t=d[0];d[0]=d[j];d[j]=t;}return +d.slice(0,len).join('');}
+function placeRow(ds){var len=ds.length,o=[];for(var i=0;i<len;i++)o.push(ds[i]+' = '+PLACES[len-1-i]);return o.join(',  ');}
+function nsPlace(r,t,want){
+ var len=NS_LEN[t],n=distinctNum(r,len),ds=digitsOf(n),m=r(),stmt,truth,lines,tip,short,spec;
+ var mode=(t===0)?(m<0.5?'digit':'value'):(m<0.34?'digit':m<0.7?'value':'times');
+ if(mode==='digit'){
+  var idx=ri(r,0,len-1),d=ds[idx],te=len-1-idx,e=te;
+  if(!want){do{e=ri(r,0,len-1);}while(e===te);}
+  stmt='In '+fmt(n)+', the digit '+d+' is in the '+PLACES[e]+' place.';truth=(e===te);
+  lines=['Write the place name under each digit:  '+placeRow(ds),'The '+d+' is in the '+PLACES[te]+' place.',
+   truth?'The statement says '+PLACES[e]+', and that matches. TRUE!':'The statement says '+PLACES[e]+', but it is really the '+PLACES[te]+' place. FALSE.'];
+  tip='Count the places from the right: ones, tens, hundreds, thousands... Say them out loud as you point at each digit.';
+  short=truth?'Yes! The '+d+' is in the '+PLACES[te]+' place.':'Right! The '+d+' is really in the '+PLACES[te]+' place.';
+  spec={m:'digit',n:n,d:d,e:e};}
+ else if(mode==='value'){
+  var cand=[];ds.forEach(function(x,i){if(x!==0)cand.push(i);});
+  var ix=pick(r,cand),dv=ds[ix],tv=len-1-ix,ev=tv;
+  if(!want){do{ev=ri(r,0,len-1);}while(ev===tv);}
+  var val=dv*p10(ev),real=dv*p10(tv);
+  stmt='In '+fmt(n)+', the digit '+dv+' is worth '+fmt(val)+'.';truth=(val===real);
+  lines=['Write the place name under each digit:  '+placeRow(ds),'The '+dv+' is in the '+PLACES[tv]+' place, so it is worth '+(tv===0?String(dv):dv+' '+TIMES+' '+fmt(p10(tv))+' = '+fmt(real))+'.',
+   truth?'The statement says '+fmt(val)+'. That matches. TRUE!':'The statement says '+fmt(val)+', but it is really worth '+fmt(real)+'. FALSE.'];
+  tip='A digit is worth its number times its place. A 3 in the hundreds place is 3 '+TIMES+' 100 = 300.';
+  short=truth?'Yes! That '+dv+' is worth '+fmt(real)+'.':'Right! That '+dv+' is really worth '+fmt(real)+'.';
+  spec={m:'value',n:n,d:dv,claim:val};}
+ else{
+  var dd=ri(r,1,9),e2=ri(r,0,t+1),e1=ri(r,e2+1,t+2),k=e1-e2,kk=k;
+  if(!want){do{kk=ri(r,1,t+2);}while(kk===k);}
+  var big=dd*p10(e1),small=dd*p10(e2),N=p10(kk);
+  stmt='The '+dd+' in '+fmt(big)+' is worth '+fmt(N)+' times as much as the '+dd+' in '+fmt(small)+'.';truth=(kk===k);
+  var ch=[];for(var j=1;j<=k;j++)ch.push(fmt(small*p10(j)));
+  lines=['Each place to the left is worth 10 times more.','From '+fmt(small)+' to '+fmt(big)+' you move '+k+' place'+(k>1?'s':'')+' to the left:  '+fmt(small)+' \u2192 '+ch.join(' \u2192 '),
+   'So '+fmt(big)+' is '+fmt(p10(k))+' times as much as '+fmt(small)+'.',truth?'That matches the statement. TRUE!':'The statement says '+fmt(N)+' times, but it is really '+fmt(p10(k))+' times. FALSE.'];
+  tip='Moving one place left makes a digit worth 10 times as much. Two places left is 100 times, three places is 1,000 times.';
+  short=truth?'Yes! '+fmt(p10(k))+' times as much.':'Right! It is really '+fmt(p10(k))+' times as much.';
+  spec={m:'times',d:dd,e1:e1,e2:e2,claim:N};}
+ return {prompt:'',stmt:stmt,truth:truth,sections:[sec('\uD83D\uDD0D Let\u2019s check it','Look at the place of each digit.',lines)],tip:tip,shortExpl:short,spec:spec};}
+function roundTo(n,p){return Math.floor((n+p/2)/p)*p;}
+function nsRound(r,t,want){
+ var len=NS_LEN[t],opts=[[1],[1,2],[2,3],[3,4],[4,5,6]][t],pe=pick(r,opts),p=p10(pe),n,tries=0;
+ do{n=ri(r,p10(len-1),p10(len)-1);
+  if(r()<0.28){n=Math.floor(n/p)*p+5*p10(pe-1)+ri(r,0,p10(pe-1)-1);}   /* the "exactly half" case rounds UP */
+  tries++;}while((n%p===0||n>=p10(len))&&tries<50);
+ if(n>=p10(len)||n%p===0)n=p10(len-1)+5*p10(pe-1)+3;
+ var R=roundTo(n,p),claim=R;
+ if(!want){var c=uniq([R+p,R-p,roundTo(n,p10(pe-1)),roundTo(n,p*10),Math.floor(n/p)*p,Math.ceil(n/p)*p].filter(function(x){return x!==R&&x>0;}));claim=pick(r,c);}
+ var dr=Math.floor(n/p10(pe-1))%10,keep=Math.floor(n/p)*p,truth=(claim===R),nm=ROUND_NAMES[pe];
+ var lines=['Find the '+nm+'s place and look at the digit just to its right (the '+(pe===1?'ones':PLACES[pe-1])+' place): it is '+dr+'.',
+  dr>=5?dr+' is 5 or more, so round UP:  '+fmt(keep)+' + '+fmt(p)+' = '+fmt(R)+'.':dr+' is 4 or less, so the '+nm+'s place stays the same: '+fmt(R)+'.',
+  'Every digit to the right turns into a zero.  '+fmt(n)+' rounds to '+fmt(R)+'.',
+  truth?'The statement says '+fmt(claim)+'. That matches. TRUE!':'The statement says '+fmt(claim)+', but the right answer is '+fmt(R)+'. FALSE.'];
+ return {prompt:'',stmt:fmt(n)+' rounded to the nearest '+nm+' is '+fmt(claim)+'.',truth:truth,
+  sections:[sec('\uD83D\uDD0D Let\u2019s check it','Look one digit to the right of the place you are rounding to.',lines)],
+  tip:'Rounding rule: look one digit to the right. 0, 1, 2, 3, 4 \u2192 stay. 5, 6, 7, 8, 9 \u2192 go up!',
+  shortExpl:truth?'Yes! '+fmt(n)+' rounds to '+fmt(R)+'.':'Right! '+fmt(n)+' really rounds to '+fmt(R)+'.',spec:{m:'round',n:n,pe:pe,claim:claim}};}
+function nsCompare(r,t,want){
+ var useExp=(t===2||t===4||(t===3&&r()<0.3)||(t===1&&r()<0.2));
+ if(!useExp){
+  var len=NS_LEN[t],k=ri(r,0,Math.min(len-2,t+1)),a=[],b=[],i;
+  for(i=0;i<len;i++){var d=ri(r,i===0?1:0,9);a.push(d);b.push(d);}
+  var da=ri(r,i=k===0?1:0,9),db;do{db=ri(r,k===0?1:0,9);}while(db===da);
+  a[k]=da;b[k]=db;for(i=k+1;i<len;i++){a[i]=ri(r,0,9);b[i]=ri(r,0,9);}
+  var A=+a.join(''),Bn=+b.join(''),big=Math.max(A,Bn),small=Math.min(A,Bn);
+  var x=r()<0.5?big:small,y=x===big?small:big,real=x>y?'>':'<',sym=want?real:(real==='>'?'<':'>');
+  var kp=len-1-k,dx=x===A?da:db,dy=x===A?db:da;
+  var lines=['Line up the digits and compare from the left.',k>0?'The first '+k+' digit'+(k>1?'s are':' is')+' the same. The first difference is in the '+PLACES[kp]+' place.':'The first difference is right away, in the '+PLACES[kp]+' place.',
+   fmt(x)+' has '+dx+' there and '+fmt(y)+' has '+dy+'.  '+dx+(dx>dy?' > ':' < ')+dy+', so '+fmt(x)+(real==='>'?' is greater than ':' is less than ')+fmt(y)+'.',
+   want?'The statement says '+fmt(x)+' '+sym+' '+fmt(y)+'. TRUE!':'The statement says '+fmt(x)+' '+sym+' '+fmt(y)+', but it is really '+fmt(x)+' '+real+' '+fmt(y)+'. FALSE.'];
+  return {prompt:'',stmt:fmt(x)+' '+sym+' '+fmt(y),truth:!!want,sections:[sec('\uD83D\uDD0D Let\u2019s check it','Compare the digits from the left, one place at a time.',lines)],
+   tip:'The bigger number has the bigger digit in the first place where the two numbers are different.',shortExpl:want?'Yes! '+fmt(x)+' '+real+' '+fmt(y)+'.':'Right! Really '+fmt(x)+' '+real+' '+fmt(y)+'.',spec:{m:'cmp',x:x,y:y,sym:sym}};}
+ /* expanded form */
+ var L=(t<=1)?4:(t===2?4:(t===3?5:ri(r,6,7))),ds=[ri(r,1,9)],j;
+ for(j=1;j<L;j++)ds.push(r()<(t>=2?0.35:0.15)?0:ri(r,1,9));
+ var nz=ds.filter(function(x){return x!==0;}).length;if(nz<2)ds[L-1]=ri(r,1,9);
+ var n=+ds.join(''),parts=[];ds.forEach(function(x,i){if(x)parts.push(fmt(x*p10(L-1-i)));});
+ var claim=n;
+ if(!want){var cs=[];for(j=0;j<L-1;j++)if(ds[j]!==ds[j+1]){var c2=ds.slice();var tmp=c2[j];c2[j]=c2[j+1];c2[j+1]=tmp;if(c2[0]!==0)cs.push(+c2.join(''));}
+  for(j=0;j<L;j++){if(n+p10(j)!==n)cs.push(n+p10(j));if(n-p10(j)>p10(L-2))cs.push(n-p10(j));}
+  cs=uniq(cs.filter(function(x){return x!==n&&x>0;}));claim=pick(r,cs);}
+ var truth=(claim===n),zero=ds.indexOf(0)>=0;
+ var lines2=['Add up the place values:  '+parts.join(' + ')+' = '+fmt(n)+'.',zero?'A zero means that place is empty, so it gets no part in the sum.':'Each digit gets its own part.',
+  truth?'The statement says '+fmt(claim)+'. That matches. TRUE!':'The statement says '+fmt(claim)+', but the sum is '+fmt(n)+'. FALSE.'];
+ return {prompt:'',stmt:parts.join(' + ')+' = '+fmt(claim),truth:truth,sections:[sec('\uD83D\uDD0D Let\u2019s check it','Add the parts together.',lines2)],
+  tip:'Expanded form splits a number by place value. Watch for zeros: 7,405 has no tens, so it is 7,000 + 400 + 5.',
+  shortExpl:truth?'Yes! They add up to '+fmt(n)+'.':'Right! They really add up to '+fmt(n)+'.',spec:{m:'exp',parts:parts.map(function(x){return +x.replace(/,/g,'');}),claim:claim}};}
+
+/* =====================================================================
+   TOPIC: MULTIPLICATION & DIVISION FACTS + WORD PROBLEMS
+   ===================================================================== */
+function factPair(r,t){var a,b;
+ if(t===0){a=pick(r,[2,3,4,5,10]);b=ri(r,1,10);}
+ else if(t===1){a=ri(r,2,9);b=ri(r,2,9);}
+ else if(t===2){do{a=ri(r,3,12);b=ri(r,3,12);}while(Math.max(a,b)<6);}
+ else if(t===3){a=ri(r,11,19);b=ri(r,3,9);}
+ else{a=ri(r,12,49);b=ri(r,3,9);}
+ if(t<3&&r()<0.5){var x=a;a=b;b=x;}
+ return [a,b];}
+function multWhy(a,b){
+ var x=Math.max(a,b),y=Math.min(a,b);
+ if(x>=11){var tens=Math.floor(x/10)*10,ones=x-tens;
+  return [x+' '+TIMES+' '+y+' = ('+tens+' '+TIMES+' '+y+') + ('+ones+' '+TIMES+' '+y+')',tens+' '+TIMES+' '+y+' = '+(tens*y)+'  and  '+ones+' '+TIMES+' '+y+' = '+(ones*y),(tens*y)+' + '+(ones*y)+' = '+(x*y)];}
+ if(y===1)return [x+' '+TIMES+' 1 = '+x+' (anything times 1 stays the same).'];
+ if(y===10||x===10)return [x+' '+TIMES+' '+y+' = '+(x*y)+' (times 10 just adds a zero).'];
+ if(y===9)return ['9 '+TIMES+' '+x+' = (10 '+TIMES+' '+x+') '+MINUS+' '+x+' = '+(10*x)+' '+MINUS+' '+x+' = '+(9*x)];
+ if(y===5)return ['5 '+TIMES+' '+x+' is half of 10 '+TIMES+' '+x+':  '+(10*x)+' '+DIV+' 2 = '+(5*x)];
+ if(y===2)return ['2 '+TIMES+' '+x+' = '+x+' + '+x+' = '+(2*x)];
+ if(y===4)return ['4 '+TIMES+' '+x+' = double, then double again:  '+(2*x)+' \u2192 '+(4*x)];
+ if(y===3)return ['3 '+TIMES+' '+x+' = '+x+' + '+x+' + '+x+' = '+(3*x)];
+ return [x+' '+TIMES+' '+y+' = ('+x+' '+TIMES+' 5) + ('+x+' '+TIMES+' '+(y-5)+') = '+(x*5)+' + '+(x*(y-5))+' = '+(x*y)];}
+function nearMisses(a,b){var p=a*b,c=[a*(b+1),a*(b-1),(a+1)*b,(a-1)*b,p+1,p-1,p+10,p-10,p+2,p-2];
+ var s=String(p);if(s.length===2&&s[0]!==s[1])c.push(+(s[1]+s[0]));if(a+b!==p)c.push(a+b);
+ return uniq(c.filter(function(x){return x!==p&&x>0;}));}
+function fxMult(r,t,want){var ab=factPair(r,t),a=ab[0],b=ab[1],p=a*b,claim=want?p:pick(r,nearMisses(a,b));
+ var truth=(claim===p);
+ var lines=multWhy(a,b).concat([truth?'So '+a+' '+TIMES+' '+b+' = '+p+'. The statement says '+claim+'. TRUE!':'So '+a+' '+TIMES+' '+b+' = '+p+', not '+claim+'. FALSE.']);
+ return {prompt:'',stmt:a+' '+TIMES+' '+b+' = '+claim,truth:truth,sections:[sec('\uD83D\uDD0D Let\u2019s check it','Break the problem into easier pieces.',lines)],
+  tip:'Facts you know can unlock facts you don\u2019t: 5s are half of 10s, 9s are 10s minus one more, and 4s are doubling twice.',
+  shortExpl:truth?'Yes! '+a+' '+TIMES+' '+b+' = '+p+'.':'Right! '+a+' '+TIMES+' '+b+' is really '+p+'.',spec:{m:'mult',a:a,b:b,claim:claim}};}
+function fxDiv(r,t,want){var ab=factPair(r,t),a=ab[0],b=ab[1],p=a*b;
+ if(t>=3){var d=b,q=a;a=q;b=d;}   /* dividend = a*b, divisor = b, quotient = a */
+ var divisor=(t>=3)?b:(r()<0.5?a:b),q2=p/divisor,claim=want?q2:pick(r,uniq([q2+1,q2-1,q2+2,q2-2,q2*2,divisor+q2].filter(function(x){return x!==q2&&x>0;}))),truth=(claim===q2);
+ var lines=['Think of the matching multiplication:  '+divisor+' '+TIMES+' ? = '+p,
+  divisor+' '+TIMES+' '+q2+' = '+p+', so '+p+' '+DIV+' '+divisor+' = '+q2+'.'];
+ if(t>=3)lines.push('Check it by splitting:  '+multWhy(q2,divisor).join('  \u2192  '));
+ lines.push(truth?'The statement says '+claim+'. TRUE!':'The statement says '+claim+', but '+divisor+' '+TIMES+' '+claim+' = '+(divisor*claim)+', not '+p+'. FALSE.');
+ return {prompt:'',stmt:p+' '+DIV+' '+divisor+' = '+claim,truth:truth,sections:[sec('\uD83D\uDD0D Let\u2019s check it','Division is multiplication backwards.',lines)],
+  tip:'Turn a division into a missing-factor multiplication: 72 '+DIV+' 9 asks \u201C9 '+TIMES+' what = 72?\u201D',
+  shortExpl:truth?'Yes! '+p+' '+DIV+' '+divisor+' = '+q2+'.':'Right! '+p+' '+DIV+' '+divisor+' is really '+q2+'.',spec:{m:'div',n:p,d:divisor,claim:claim}};}
+var NAMES=['Mia','Leo','Ava','Noah','Zoe','Sam','Ivy','Max','Eli','Ruby'],ITEMS=['apples','stickers','marbles','cookies','pencils','cards','shells','beads'],CONT=['bags','boxes','jars','packs'];
+function fxWord(r,t,want){
+ var forms=t===0?['groups','share','price']:t===1?['groups','share','price','times']:t===2?['times','rows','pack']:['rows','pack','vans'];
+ var f=pick(r,forms),nm=pick(r,NAMES),it=pick(r,ITEMS),cn=pick(r,CONT),hi=t<=1?(t===0?6:9):(t===2?9:12),a=ri(r,2,hi),b=ri(r,2,hi),ans,bad,prompt,claimTxt,lines,unit,spec;
+ function claimOf(correct,cands){return want?correct:pick(r,uniq(cands.filter(function(x){return x!==correct&&x>0;})));}
+ if(f==='groups'){ans=a*b;var c=claimOf(ans,[a+b,a*(b+1),a*(b-1),(a+1)*b,ans+10,ans-10]);bad=c;
+  prompt=nm+' has '+a+' '+cn+' with '+b+' '+it+' in each.';claimTxt=nm+' has '+c+' '+it+' in all.';
+  lines=['Equal groups means multiply:  '+a+' '+TIMES+' '+b+' = '+ans+'.'];spec={w:f,a:a,b:b,claim:c};}
+ else if(f==='share'){var tot=a*b;ans=b;var c2=claimOf(ans,[a,tot-a,ans+1,ans-1,tot,ans*2]);
+  prompt=tot+' '+it+' are shared equally among '+a+' friends.';claimTxt='Each friend gets '+c2+' '+it+'.';
+  lines=['Sharing equally means divide:  '+tot+' '+DIV+' '+a+' = '+ans+'.',a+' '+TIMES+' '+ans+' = '+tot+', so it checks out.'];spec={w:f,tot:tot,a:a,claim:c2};}
+ else if(f==='price'){ans=a*b;var c3=claimOf(ans,[a+b,a*(b+1),a*(b-1),ans+5,ans-5]);
+  prompt='One book costs $'+a+'.';claimTxt=b+' books cost $'+c3+'.';
+  lines=['Same price each time means multiply:  '+b+' '+TIMES+' $'+a+' = $'+ans+'.'];spec={w:f,a:a,b:b,claim:c3};}
+ else if(f==='times'){var base=ri(r,3,t===2?12:15),m=ri(r,2,t===2?9:12);ans=base*m;var c4=claimOf(ans,[base+m,base*(m+1),base*(m-1),ans+10,ans-10]);
+  prompt=nm+' has '+base+' marbles. Jo has '+m+' times as many as '+nm+'.';claimTxt='Jo has '+c4+' marbles.';
+  lines=['\u201C'+m+' times as many\u201D means multiply:  '+m+' '+TIMES+' '+base+' = '+ans+'.'];spec={w:f,base:base,m:m,claim:c4};}
+ else if(f==='rows'){var rows=ri(r,3,t===2?9:12),per=ri(r,4,t===2?9:12),gone=ri(r,2,Math.min(20,rows*per-1));ans=rows*per-gone;
+  var c5=claimOf(ans,[rows*per,rows*per+gone,rows+per-gone,ans+per,ans-1]);
+  prompt='There are '+rows+' rows of '+per+' chairs. '+gone+' chairs are taken.';claimTxt=c5+' chairs are empty.';
+  lines=['Step 1: all the chairs:  '+rows+' '+TIMES+' '+per+' = '+(rows*per)+'.','Step 2: take away the ones that are taken:  '+(rows*per)+' '+MINUS+' '+gone+' = '+ans+'.'];spec={w:f,rows:rows,per:per,gone:gone,claim:c5};}
+ else if(f==='pack'){var bx=ri(r,3,t===2?9:12),per2=ri(r,6,12),eat=ri(r,2,Math.min(15,bx*per2-1));ans=bx*per2-eat;
+  var c6=claimOf(ans,[bx*per2,bx*per2+eat,bx+per2-eat,ans+per2,ans-10]);
+  prompt=nm+' packs '+bx+' boxes with '+per2+' cookies in each box. Then '+eat+' cookies get eaten.';claimTxt=c6+' cookies are left.';
+  lines=['Step 1: all the cookies:  '+bx+' '+TIMES+' '+per2+' = '+(bx*per2)+'.','Step 2: take away the eaten ones:  '+(bx*per2)+' '+MINUS+' '+eat+' = '+ans+'.'];spec={w:f,bx:bx,per:per2,eat:eat,claim:c6};}
+ else{var cap=ri(r,4,9),kids=ri(r,cap*2+1,cap*7-1);while(kids%cap===0)kids++;ans=Math.ceil(kids/cap);
+  var c7=claimOf(ans,[Math.floor(kids/cap),ans+1,ans-1,kids-cap,cap]);
+  prompt=kids+' kids ride in vans. Each van holds '+cap+' kids.';claimTxt=c7+' vans are needed.';
+  lines=[kids+' '+DIV+' '+cap+' = '+Math.floor(kids/cap)+' with '+(kids%cap)+' left over.','The kids left over still need a ride, so we need one more van:  '+Math.floor(kids/cap)+' + 1 = '+ans+'.'];spec={w:f,kids:kids,cap:cap,claim:c7};}
+ var truth=(want?true:false);
+ lines.push(truth?'The statement matches the answer. TRUE!':'The right answer is '+ans+', so the statement is FALSE.');
+ return {prompt:prompt,stmt:claimTxt,truth:truth,sections:[sec('\uD83D\uDD0D Let\u2019s check it','Figure out the math from the story.',lines)],
+  tip:'Read the story slowly. Ask: are these equal groups (\u00D7), sharing (\u00F7), or taking away (\u2212)? Do one step at a time.',
+  shortExpl:truth?'Yes! The math matches the story.':'Right! The story really gives '+ans+'.',spec:spec};}
+
+/* =====================================================================
+   TOPIC: FRACTIONS  (equivalent, compare, fraction of a number, add/subtract)
+   ===================================================================== */
+function fr(n,d){return n+'/'+d;}
+function frEquiv(r,t,want){
+ var d,n,m,A,Bq,truth,lines,spec;
+ if(t<=1){d=ri(r,2,t===0?5:6);n=ri(r,1,d-1);m=t===0?2:ri(r,2,5);
+  var d2=d*m,n2=n*m,mode=r()<0.5?'grow':'grow-r';
+  var wrong=pick(r,[[n+m,d+m],[n,d2],[n2,d+m],[n2+1,d2],[n2,d2+1]].filter(function(x){return x[0]*d!==x[1]*n&&x[0]>0&&x[1]>0;}));
+  var rn=want?n2:wrong[0],rd=want?d2:wrong[1];A=[n,d];Bq=[rn,rd];
+  lines=['Make an equivalent fraction by multiplying the top AND bottom by the same number.',fr(n,d)+' = ('+n+' '+TIMES+' '+m+') / ('+d+' '+TIMES+' '+m+') = '+fr(n2,d2)+'.',
+   want?'The statement says '+fr(rn,rd)+'. That matches. TRUE!':'The statement says '+fr(rn,rd)+', which is not '+fr(n2,d2)+'. FALSE.'];}
+ else if(t===2){m=ri(r,2,5);var s=pick(r,[[1,2],[1,3],[2,3],[1,4],[3,4],[2,5],[3,5],[1,5],[5,6],[1,6]]);
+  var bn=s[0]*m,bd=s[1]*m,wr=pick(r,[[s[0]+1,s[1]],[s[0],s[1]+1],[s[0]+m,s[1]],[Math.max(1,s[0]-1),s[1]]].filter(function(x){return x[0]*bd!==x[1]*bn&&x[0]>0;}));
+  var sn=want?s[0]:wr[0],sd=want?s[1]:wr[1];A=[bn,bd];Bq=[sn,sd];
+  lines=['Simplify by dividing the top AND bottom by the same number. Both '+bn+' and '+bd+' can be divided by '+m+'.',fr(bn,bd)+' = ('+bn+' '+DIV+' '+m+') / ('+bd+' '+DIV+' '+m+') = '+fr(s[0],s[1])+'.',
+   want?'The statement says '+fr(sn,sd)+'. That matches. TRUE!':'The statement says '+fr(sn,sd)+', which is not '+fr(s[0],s[1])+'. FALSE.'];}
+ else{var base=pick(r,[[1,2],[1,3],[2,3],[3,4],[1,4],[2,5],[3,5],[5,6],[3,8],[5,8],[7,8],[1,6],[7,10],[3,10]]),m1=ri(r,2,t===3?5:6),m2=ri(r,2,t===3?5:6);
+  if(t===3)m2=1;else if(m1===m2)m2=m1===6?5:m1+1;
+  var an=base[0]*m1,ad=base[1]*m1,bn2=base[0]*m2,bd2=base[1]*m2;
+  var wr2=pick(r,[[bn2+1,bd2],[bn2,bd2+1],[bn2+m2,bd2+m2],[bn2-1,bd2]].filter(function(x){return x[0]*ad!==x[1]*an&&x[0]>0&&x[1]>0;}));
+  A=[an,ad];Bq=want?[bn2,bd2]:wr2;
+  var red=function(n,d){var g=gcd(n,d);return [n/g,d/g];},ra=red(A[0],A[1]),rb=red(Bq[0],Bq[1]);
+  lines=['Simplify each fraction as far as you can (divide top and bottom by the same number).',fr(A[0],A[1])+' simplifies to '+fr(ra[0],ra[1])+'  and  '+fr(Bq[0],Bq[1])+' simplifies to '+fr(rb[0],rb[1])+'.',
+   want?'Both are '+fr(ra[0],ra[1])+', so they are equal. TRUE!':'One is '+fr(ra[0],ra[1])+' and the other is '+fr(rb[0],rb[1])+'. They are different. FALSE.'];}
+ truth=(A[0]*Bq[1]===A[1]*Bq[0]);
+ return {prompt:'',stmt:fr(A[0],A[1])+' = '+fr(Bq[0],Bq[1]),truth:truth,sections:[sec('\uD83D\uDD0D Let\u2019s check it','Equivalent fractions are the same size, just cut into different pieces.',lines)],
+  tip:'To keep a fraction the same size, MULTIPLY or DIVIDE the top and bottom by the same number. Adding the same number to both changes the size!',
+  shortExpl:truth?'Yes! They are the same size.':'Right! Those two fractions are different sizes.',spec:{m:'equiv',n1:A[0],d1:A[1],n2:Bq[0],d2:Bq[1]}};}
+function frCmpPair(r,t){var n1,d1,n2,d2,i;
+ for(i=0;i<80;i++){
+  if(t===0){d1=d2=ri(r,3,10);n1=ri(r,1,d1-1);n2=ri(r,1,d1-1);}
+  else if(t===1){if(r()<0.5){n1=n2=ri(r,1,3);d1=ri(r,n1+1,10);d2=ri(r,n1+1,10);}else{d1=pick(r,[3,5,7,9]);n1=ri(r,1,d1-1);n2=1;d2=2;}}
+  else if(t===2){d1=pick(r,[2,3,4,5]);var mm=ri(r,2,3);d2=d1*mm;n1=ri(r,1,d1-1);n2=ri(r,1,d2-1);}
+  else if(t===3){var ds=[2,3,4,5,6,8,10,12];d1=pick(r,ds);d2=pick(r,ds);n1=ri(r,1,d1-1);n2=ri(r,1,d2-1);}
+  else{if(r()<0.6){d1=ri(r,3,12);d2=ri(r,3,12);n1=d1-1;n2=d2-1;}else{var ds2=[3,4,5,6,7,8,9,10,12];d1=pick(r,ds2);d2=pick(r,ds2);n1=ri(r,1,d1-1);n2=ri(r,1,d2-1);}}
+  if(n1*d2!==n2*d1&&(t===0||d1!==d2||n1!==n2)&&(t>0||d1===d2)&&lcm(d1,d2)<=72)return [n1,d1,n2,d2];}
+ return [1,4,3,4];}
+function frCompare(r,t,want){var p=frCmpPair(r,t),n1=p[0],d1=p[1],n2=p[2],d2=p[3],real=(n1*d2>n2*d1)?'>':'<',sym=want?real:(real==='>'?'<':'>'),lines,L=lcm(d1,d2);
+ if(d1===d2)lines=['The denominators are the same ('+d1+'), so compare the tops (numerators): '+n1+' and '+n2+'.',n1+(n1>n2?' > ':' < ')+n2+', so '+fr(n1,d1)+(real==='>'?' > ':' < ')+fr(n2,d2)+'.'];
+ else if(n1===n2)lines=['The numerators are the same ('+n1+'), so look at the pieces: a bigger denominator means smaller pieces.',d1+(d1>d2?' > ':' < ')+d2+' means '+fr(n1,d1)+(d1>d2?' is smaller':' is bigger')+' than '+fr(n2,d2)+'.','So '+fr(n1,d1)+(real==='>'?' > ':' < ')+fr(n2,d2)+'.'];
+ else{var a=n1*(L/d1),b=n2*(L/d2);lines=['Make the denominators the same. The common denominator of '+d1+' and '+d2+' is '+L+'.',fr(n1,d1)+' = '+fr(a,L)+'  and  '+fr(n2,d2)+' = '+fr(b,L)+'.',a+(a>b?' > ':' < ')+b+', so '+fr(n1,d1)+(real==='>'?' > ':' < ')+fr(n2,d2)+'.'];}
+ lines.push(want?'The statement says '+sym+'. That matches. TRUE!':'The statement says '+sym+', but it is really '+real+'. FALSE.');
+ return {prompt:'',stmt:fr(n1,d1)+' '+sym+' '+fr(n2,d2),truth:!!want,sections:[sec('\uD83D\uDD0D Let\u2019s check it','Get the fractions to the same denominator, then compare the tops.',lines)],
+  tip:'Same bottoms? Bigger top wins. Same tops? Smaller bottom wins (bigger pieces). Different? Find a common denominator.',
+  shortExpl:want?'Yes! '+fr(n1,d1)+' '+real+' '+fr(n2,d2)+'.':'Right! It is really '+fr(n1,d1)+' '+real+' '+fr(n2,d2)+'.',spec:{m:'cmp',n1:n1,d1:d1,n2:n2,d2:d2,sym:sym}};}
+function frOf(r,t,want){var d,n,k;
+ if(t===0){d=ri(r,2,5);n=1;k=ri(r,2,9);}
+ else if(t===1){d=ri(r,2,5);n=ri(r,1,d-1);k=ri(r,2,9);}
+ else if(t===2){d=ri(r,3,8);n=ri(r,1,d-1);k=ri(r,2,9);}
+ else{d=ri(r,3,10);n=ri(r,2,d-1);k=ri(r,3,12);}
+ var whole=d*k,one=k,ans=n*k,claim=want?ans:pick(r,uniq([one,ans+k,ans-k,n+k,whole-ans,ans+1,ans-1,whole-n].filter(function(x){return x!==ans&&x>0;}))),truth=(claim===ans);
+ var lines=['Step 1: divide the number into '+d+' equal parts:  '+whole+' '+DIV+' '+d+' = '+one+'  (that is 1/'+d+' of '+whole+').',
+  n===1?'You only need 1 part, so the answer is '+one+'.':'Step 2: take '+n+' of those parts:  '+n+' '+TIMES+' '+one+' = '+ans+'.',
+  truth?'The statement says '+claim+'. That matches. TRUE!':'The statement says '+claim+', but the right answer is '+ans+'. FALSE.'];
+ return {prompt:'',stmt:fr(n,d)+' of '+whole+' is '+claim+'.',truth:truth,sections:[sec('\uD83D\uDD0D Let\u2019s check it','Divide by the bottom number, then multiply by the top number.',lines)],
+  tip:'To find a fraction of a number: divide by the denominator (bottom) to get one part, then multiply by the numerator (top).',
+  shortExpl:truth?'Yes! '+fr(n,d)+' of '+whole+' is '+ans+'.':'Right! '+fr(n,d)+' of '+whole+' is really '+ans+'.',spec:{m:'of',n:n,d:d,whole:whole,claim:claim}};}
+function frAdd(r,t,want){var d,a,b,stmt,ans,claimTxt,lines,spec,truth=!!want;
+ if(t===0){d=ri(r,3,10);var sub=r()<0.4;
+  if(!sub){a=ri(r,1,d-2);b=ri(r,1,d-1-a);ans=[a+b,d];var cl=want?ans:pick(r,[[a+b,d+d],[a+b+1,d],[a+b-1,d],[Math.abs(a-b)||1,d]].filter(function(x){return x[0]>0&&!(x[0]===ans[0]&&x[1]===ans[1]);}));
+   stmt=fr(a,d)+' + '+fr(b,d)+' = '+fr(cl[0],cl[1]);claimTxt=cl;
+   lines=['The denominators are the same, so add the tops and keep the bottom:  '+a+' + '+b+' = '+(a+b)+', and the bottom stays '+d+'.',fr(a,d)+' + '+fr(b,d)+' = '+fr(a+b,d)+'.'];spec={m:'add',a:a,b:b,d:d,cn:cl[0],cd:cl[1]};}
+  else{a=ri(r,2,d-1);b=ri(r,1,a-1);ans=[a-b,d];var cl2=want?ans:pick(r,[[a-b,d-d+d+d],[a-b+1,d],[a-b-1,d],[a+b,d]].filter(function(x){return x[0]>0&&!(x[0]===ans[0]&&x[1]===ans[1]);}));
+   stmt=fr(a,d)+' '+MINUS+' '+fr(b,d)+' = '+fr(cl2[0],cl2[1]);claimTxt=cl2;
+   lines=['The denominators are the same, so subtract the tops and keep the bottom:  '+a+' '+MINUS+' '+b+' = '+(a-b)+', and the bottom stays '+d+'.',fr(a,d)+' '+MINUS+' '+fr(b,d)+' = '+fr(a-b,d)+'.'];spec={m:'sub',a:a,b:b,d:d,cn:cl2[0],cd:cl2[1]};}}
+ else if(t===1){d=ri(r,3,10);a=ri(r,2,d-1);b=ri(r,Math.max(2,d-a+1),d-1);var sum=a+b;ans=[sum,d];
+  var cl3=want?ans:pick(r,[[sum,d+d],[sum+1,d],[sum-1,d],[sum+2,d]].filter(function(x){return !(x[0]===ans[0]&&x[1]===ans[1]);}));
+  stmt=fr(a,d)+' + '+fr(b,d)+' = '+fr(cl3[0],cl3[1]);claimTxt=cl3;
+  lines=['Same denominators: add the tops and keep the bottom.  '+a+' + '+b+' = '+sum+', so the answer is '+fr(sum,d)+'.','(The top is bigger than the bottom, so this fraction is more than 1 whole. That is okay!)'];spec={m:'add',a:a,b:b,d:d,cn:cl3[0],cd:cl3[1]};}
+ else{d=ri(r,3,10);
+  if(r()<0.5){a=ri(r,2,d-1);b=ri(r,Math.max(2,d-a+1),d-1);var s2=a+b,w=1,rem=s2-d;ans=w+' '+rem+'/'+d;
+   var wrongs=uniq([w+' '+(rem+1)+'/'+d,w+' '+Math.max(1,rem-1)+'/'+d,(w+1)+' '+rem+'/'+d,'1 '+rem+'/'+(d+d),s2+'/'+d+' (still 1 whole short)'].filter(function(x){return x!==ans;}));
+   var wr3=wrongs.slice(0,4).filter(function(x){return x.indexOf('short')<0;});
+   var cm=want?ans:pick(r,wr3);stmt=fr(a,d)+' + '+fr(b,d)+' = '+cm;claimTxt=cm;
+   lines=['Add the tops:  '+a+' + '+b+' = '+s2+', so the sum is '+fr(s2,d)+'.',d+'/'+d+' makes 1 whole. '+s2+' '+MINUS+' '+d+' = '+rem+', so '+fr(s2,d)+' = 1 and '+fr(rem,d)+', which we write as '+ans+'.'];spec={m:'mixed',a:a,b:b,d:d,claim:cm};}
+  else{a=ri(r,1,d-1);ans=[d-a,d];var cl4=want?ans:pick(r,[[d-a,d+d],[d-a+1,d],[d-a-1,d],[a,d]].filter(function(x){return x[0]>0&&!(x[0]===ans[0]&&x[1]===ans[1]);}));
+   stmt='1 '+MINUS+' '+fr(a,d)+' = '+fr(cl4[0],cl4[1]);claimTxt=cl4;
+   lines=['Write 1 whole as '+fr(d,d)+'  (all '+d+' pieces).','Then subtract:  '+fr(d,d)+' '+MINUS+' '+fr(a,d)+' = '+fr(d-a,d)+'.'];spec={m:'whole',a:a,d:d,cn:cl4[0],cd:cl4[1]};}}
+ lines.push(truth?'The statement matches. TRUE!':'The statement does not match the right answer, so it is FALSE.');
+ return {prompt:'',stmt:stmt,truth:truth,sections:[sec('\uD83D\uDD0D Let\u2019s check it','With the same denominator, only the tops change.',lines)],
+  tip:'When the denominators are the same, add or subtract only the tops (numerators). The bottom (denominator) stays the same!',
+  shortExpl:truth?'Yes! That is the right sum.':'Right! That one is not correct.',spec:spec};}
+
+/* =====================================================================
+   REGISTRY
+   ===================================================================== */
+var ALG_SKILL={addsub:'one-step add/subtract',muldiv:'one-step multiply/divide',twostep:'two-step',parens:'parentheses',both:'variable both sides',order:'order of operations',multi:'multi-step'};
+var ALG_TIPS={addsub:'When a number is added, subtract it from the other side to undo it. When it is subtracted, add it back.',
+ muldiv:'Use your times tables backwards: \u00F7 undoes \u00D7, and \u00D7 undoes \u00F7. Try 3 quick fact drills!',
+ twostep:'Undo the steps in reverse order: first the + or \u2212, then the \u00D7 or \u00F7.',
+ parens:'Do the math inside the parentheses FIRST, then the rest of the equation.',
+ both:'Plug the number into BOTH sides, work each side out, and see if they match.',
+ order:'Order of operations: \u00D7 and \u00F7 come before + and \u2212. Do those first!',
+ multi:'Go slow. Do one step at a time and say each step out loud (or write it down).'};
+function mkPools(spec){var o={};for(var l=1;l<=spec.length;l++)o[l]=spec[l-1];return o;}
+var REG={
+ algebra:{id:'algebra',name:'Algebra: expressions & variables',short:'Algebra',emoji:'\uD83E\uDDEE',maxLevel:10,practiceMax:12,levelNames:QG.LEVEL_NAMES,pools:QG.POOLS,
+  intro:'Is the mystery number right?',
+  skills:Object.keys(ALG_SKILL).map(function(k){return {id:k,skill:ALG_SKILL[k],label:QG.KIND_LABELS[k],tip:ALG_TIPS[k]};})},
+ numsense:{id:'numsense',name:'Number sense: place value & rounding',short:'Number sense',emoji:'\uD83D\uDD22',maxLevel:5,practiceMax:5,
+  levelNames:['Digit Detective','Place-Value Pro','Rounding Ranger','Big-Number Boss','Million Master'],intro:'Is the statement true or false?',
+  pools:mkPools([[['ns_place',0],['ns_round',0]],[['ns_place',1],['ns_round',1],['ns_compare',0]],[['ns_place',2],['ns_round',2],['ns_compare',1]],[['ns_place',3],['ns_round',3],['ns_compare',2]],[['ns_place',4],['ns_round',4],['ns_compare',3]]]),
+  skills:[{id:'ns_place',skill:'place value',label:'Place value',tip:'Count the places from the right: ones, tens, hundreds, thousands... A digit is worth its number times its place.'},
+   {id:'ns_round',skill:'rounding',label:'Rounding',tip:'Look one digit to the right of the place you are rounding to. 0\u20134 stay, 5\u20139 go up.'},
+   {id:'ns_compare',skill:'comparing & expanded form',label:'Comparing & expanded form',tip:'Compare from the left, the first different digit decides. In expanded form, a zero means an empty place.'}]},
+ facts:{id:'facts',name:'Multiplication & division facts',short:'Times tables',emoji:'\u2716\uFE0F',maxLevel:5,practiceMax:5,
+  levelNames:['Times Starter','Facts Fan','Fact Fluency','Double-Digit Dynamo','Word-Problem Whiz'],intro:'Is the statement true or false?',
+  pools:mkPools([[['fx_mult',0],['fx_div',0]],[['fx_mult',1],['fx_div',1],['fx_word',0]],[['fx_mult',2],['fx_div',2],['fx_word',1]],[['fx_mult',3],['fx_div',3],['fx_word',2]],[['fx_mult',4],['fx_div',4],['fx_word',3]]]),
+  skills:[{id:'fx_mult',skill:'multiplication facts',label:'Multiplication facts',tip:'Facts you know unlock facts you don\u2019t: 5s are half of 10s, 9s are 10s minus one more, 4s are doubling twice.'},
+   {id:'fx_div',skill:'division facts',label:'Division facts',tip:'Turn a division into a missing-factor multiplication: 72 \u00F7 9 asks \u201C9 \u00D7 what = 72?\u201D'},
+   {id:'fx_word',skill:'word problems',label:'Word problems',tip:'Read slowly. Ask: equal groups (\u00D7), sharing (\u00F7), or taking away (\u2212)? Do one step at a time.'}]},
+ fractions:{id:'fractions',name:'Fractions: equivalent, compare & add',short:'Fractions',emoji:'\uD83C\uDF55',maxLevel:5,practiceMax:5,
+  levelNames:['Fraction Fan','Slice Spotter','Fraction Finder','Common-Denominator Champ','Fraction Master'],intro:'Is the statement true or false?',
+  pools:mkPools([[['fr_equiv',0],['fr_compare',0]],[['fr_equiv',1],['fr_compare',1],['fr_of',0]],[['fr_equiv',2],['fr_compare',2],['fr_of',1],['fr_add',0]],[['fr_equiv',3],['fr_compare',3],['fr_of',2],['fr_add',1]],[['fr_equiv',4],['fr_compare',4],['fr_of',3],['fr_add',2]]]),
+  skills:[{id:'fr_equiv',skill:'equivalent fractions',label:'Equivalent fractions',tip:'Multiply or divide the top AND bottom by the same number to keep a fraction the same size.'},
+   {id:'fr_compare',skill:'comparing fractions',label:'Comparing fractions',tip:'Same bottoms? Bigger top wins. Same tops? Smaller bottom wins. Different? Find a common denominator.'},
+   {id:'fr_of',skill:'fraction of a number',label:'Fraction of a number',tip:'Divide by the bottom number to get one part, then multiply by the top number.'},
+   {id:'fr_add',skill:'adding & subtracting fractions',label:'Adding & subtracting fractions',tip:'Same denominator? Add or subtract only the tops. The bottom stays the same.'}]}
+};
+var ORDER=['algebra','numsense','facts','fractions'];
+var BUILDERS={ns_place:nsPlace,ns_round:nsRound,ns_compare:nsCompare,fx_mult:fxMult,fx_div:fxDiv,fx_word:fxWord,fr_equiv:frEquiv,fr_compare:frCompare,fr_of:frOf,fr_add:frAdd};
+var CATALOG={},TOPIC_OF={},KIND_LABELS={};
+ORDER.forEach(function(tid){var T=REG[tid];T.kinds=T.skills.map(function(s){return s.id;});
+ T.skills.forEach(function(s,i){CATALOG[s.id]={kind:s.id,topic:tid,topic_label:T.name,skill:s.skill,label:s.label,tip:s.tip,topic_max_level:T.maxLevel,practice_max_level:T.practiceMax,sort:i};TOPIC_OF[s.id]=tid;KIND_LABELS[s.id]=s.label;});});
+
+function poolFor(T,level,wt){var out=[],kinds={},i,e,p=T.pools[level];
+ for(i=0;i<p.length;i++){e=p[i];kinds[e[0]]=1;out.push({kind:e[0],tier:e[1],w:Math.max(0.05,wt&&wt[e[0]]!=null?wt[e[0]]:1)});}
+ if(wt){for(var k in wt){if(kinds[k]||T.kinds.indexOf(k)<0||!(wt[k]>=2))continue;
+   for(var l=level-1;l>=1;l--){var q=T.pools[l],found=null;for(i=0;i<q.length;i++)if(q[i][0]===k)found=q[i];
+    if(found){out.push({kind:k,tier:found[1],w:Math.min(4,wt[k]-0.5)});break;}}}}
+ return out;}
+function clampLevel(T,level,practice){var hi=practice?T.practiceMax:T.maxLevel;return Math.max(1,Math.min(hi,level|0));}
+/* make(topic, {seed, level, wantTrue, weights, avoid}) -> question with topic, skill, prompt, stmt, sections, tip, shortExpl */
+function make(topicId,o){
+ var T=REG[topicId];if(!T)throw new Error('unknown topic '+topicId);var level=clampLevel(T,o.level,true);
+ if(topicId==='algebra'){
+  var q=QG.makeQuestion({seed:o.seed,level:level,wantTrue:o.wantTrue,weights:o.weights,miss:o.miss,avoid:o.avoid});
+  return decorate(q);}
+ for(var attempt=0;attempt<80;attempt++){
+  var r=rngFromSeed(o.seed+(attempt?'#'+attempt:''));
+  var ent=pickWeighted(r,poolFor(T,level,o.weights));
+  var b=BUILDERS[ent.kind](r,ent.tier,!!o.wantTrue);
+  if(!b||b.truth!==!!o.wantTrue)continue;
+  var text=(b.prompt?b.prompt+' ':'')+b.stmt;
+  if(o.avoid&&attempt<50&&o.avoid.indexOf(text)>=0)continue;
+  return {topic:topicId,level:level,kind:ent.kind,label:CATALOG[ent.kind].label,skill:CATALOG[ent.kind].skill,prompt:b.prompt,stmt:b.stmt,text:text,truth:b.truth,
+   sections:b.sections,tip:b.tip,shortExpl:b.shortExpl,spec:b.spec};}
+ throw new Error('could not generate '+topicId+' level '+level+' seed '+o.seed);}
+/* add the generic fields (topic, skill, prompt, stmt, sections) to an algebra question from QuizGen */
+function decorate(q){
+ if(!q.topic){q.topic='algebra';q.skill=ALG_SKILL[q.kind];q.prompt='If '+q.vn+' = '+q.p+', is this true?';q.stmt=q.eq;}
+ return q;}
+function sectionsOf(q){
+ if(q.sections)return q.sections;
+ if(q.plug&&q.undo)return [sec('\uD83D\uDD0C Step 1: Plug it in','Swap the letter for the number, then do the math on each side.',q.plug),sec('\uD83D\uDD0D Step 2: What should '+q.vn+' really be?','Undo the steps backwards using opposite operations.',q.undo)];
+ return [];}
+function headOf(q){return q.vn?('If '+q.vn+' = '+q.p+':  '+q.eq):(q.prompt?q.prompt+'  ':'')+q.stmt;}
+/* ---- storage of finished quizzes (compact, backwards compatible with the algebra-only format) ---- */
+function compact(q){
+ if(q.sections&&!q.plug){return {l:q.level,k:q.kind,T:q.topic,t:q.truth?1:0,g:q.prompt||'',e:q.stmt,S:q.sections.map(function(s){return [s.t,s.h,s.l];}),i:q.tip,x:q.shortExpl,a:q.userAnswer===true?1:q.userAnswer===false?0:-1};}
+ return QG.compactQ(q);}
+function expand(c){
+ if(c&&c.S){var secs=c.S.map(function(s){return sec(s[0],s[1],s[2]);});
+  return {topic:c.T,skill:CATALOG[c.k]?CATALOG[c.k].skill:'',level:c.l,kind:c.k,label:KIND_LABELS[c.k]||c.k,prompt:c.g,stmt:c.e,text:(c.g?c.g+' ':'')+c.e,truth:!!c.t,sections:secs,tip:c.i,shortExpl:c.x,
+   userAnswer:c.a===1?true:c.a===0?false:undefined};}
+ return decorate(QG.expandQ(c));}
+function pack(qs){return QG.lzPack(JSON.stringify(qs.map(compact)));}
+function unpack(z){var a=JSON.parse(QG.lzUnpack(z));if(!Array.isArray(a))throw new Error('bad');return a.map(expand);}
+function maxLevelOf(topicId,practice){var T=REG[topicId];return practice?T.practiceMax:T.maxLevel;}
+return {registry:REG,order:ORDER,catalog:CATALOG,topicOf:TOPIC_OF,kindLabels:KIND_LABELS,make:make,decorate:decorate,sectionsOf:sectionsOf,headOf:headOf,
+ compact:compact,expand:expand,pack:pack,unpack:unpack,maxLevelOf:maxLevelOf,fmt:fmt,roundTo:roundTo};
+})();
+if(typeof module!=='undefined')module.exports=Topics;
+
+/* Adaptive engine: per-skill memory (streaks, mastery, spaced repetition), daily mix planner, practice ramp.
+   Pure functions over a plain `store` object ({level, skills, topics, ...}), so they are easy to test and to rebuild from raw data. */
+var Engine=(function(){
+'use strict';
+var QG=(typeof QuizGen!=='undefined')?QuizGen:require('./gen.js');
+var TP=(typeof Topics!=='undefined')?Topics:require('./topics.js');
+var GAPS=[1,3,7];            /* spaced repetition: a missed skill is due again after 1, 3 and 7 days */
+var MASTER_STREAK=3, MASTER_SESSIONS=2;  /* mastered = 3 in a row correct, spread over at least 2 sessions */
+var RECENT=10;
+function dayNum(d){var m=/^(\d{4})-(\d\d)-(\d\d)$/.exec(d||'');if(!m)return null;return Math.round(Date.UTC(+m[1],+m[2]-1,+m[3])/86400000);}
+function days(a,b){var x=dayNum(a),y=dayNum(b);return (x==null||y==null)?0:y-x;}
+function newSkill(){return {a:0,c:0,pa:0,pc:0,s:0,ss:0,sid:'',m:0,lm:'',rs:0,r:'',ls:''};}
+function newTopic(){return {lvl:1,rec:'',pa:0,pc:0,pb:0,pd:''};}
+function ensure(S){if(!S.skills)S.skills={};if(!S.topics)S.topics={};return S;}
+function skillOf(S,kind){ensure(S);return S.skills[kind]||(S.skills[kind]=newSkill());}
+function topicOf(S,t){ensure(S);return S.topics[t]||(S.topics[t]=newTopic());}
+function isDue(sk,today){return !!(sk&&sk.lm&&sk.rs<GAPS.length&&days(sk.lm,today)>=GAPS[sk.rs]);}
+function isMastered(sk){return !!(sk&&sk.s>=MASTER_STREAK&&sk.ss>=MASTER_SESSIONS);}
+function workLevel(S,t){if(t==='algebra')return S.level||1;return (S.topics&&S.topics[t]&&S.topics[t].lvl)||1;}
+function setWorkLevel(S,t,l){var max=TP.registry[t].maxLevel;l=Math.max(1,Math.min(max,l|0));if(t==='algebra')S.level=l;else topicOf(S,t).lvl=l;}
+function unlockedMax(S,t){var T=TP.registry[t],w=workLevel(S,t),pb=(S.topics&&S.topics[t]&&S.topics[t].pb)||0;return Math.min(T.practiceMax,Math.max(w+3,pb+1));}
+
+/* record one answered question. o: {kind,level,correct,date,sid,mode:'daily'|'practice'} */
+function applyOutcome(S,o){
+ var info=TP.catalog[o.kind];if(!info)return null;
+ var sk=skillOf(S,o.kind),tp=topicOf(S,info.topic),prac=o.mode==='practice',ok=!!o.correct,sid=o.sid||'';
+ if(prac){sk.pa++;if(ok)sk.pc++;tp.pa++;if(ok)tp.pc++;}else{sk.a++;if(ok)sk.c++;}
+ sk.r=(sk.r+(ok?'1':'0')).slice(-RECENT);sk.ls=o.date||sk.ls;
+ if(ok){
+  if(sk.s===0){sk.ss=1;sk.sid=sid;}else if(sk.sid!==sid){sk.ss++;sk.sid=sid;}
+  sk.s++;
+  if(sk.rs<GAPS.length&&sk.lm&&days(sk.lm,o.date)>=GAPS[sk.rs])sk.rs++;
+  sk.m=isMastered(sk)?1:0;
+ }else{sk.s=0;sk.ss=0;sk.sid='';sk.m=0;sk.lm=o.date||sk.lm;sk.rs=0;}
+ if(prac&&ok&&o.level>(tp.pb||0))tp.pb=o.level;
+ /* non-algebra topics track their own working level from answers given AT that level */
+ if(info.topic!=='algebra'&&o.level===(tp.lvl||1)){
+  tp.rec=(tp.rec+(ok?'1':'0')).slice(-6);var l4=tp.rec.slice(-4);
+  if(l4==='1111'&&tp.lvl<TP.registry[info.topic].maxLevel){tp.lvl++;tp.rec='';}
+  else if(l4.length===4&&(l4.match(/0/g)||[]).length>=3&&tp.lvl>1){tp.lvl--;tp.rec='';}}
+ return sk;}
+
+/* how much a skill should show up next time (1 = normal) */
+function skillWeight(sk,today){
+ if(!sk||(sk.a+sk.pa)===0)return 1.2;
+ var due=isDue(sk,today);
+ if(sk.m&&!due){return days(sk.ls,today)>14?0.6:0.25;}
+ if(sk.m&&due)return 1.0;
+ var len=sk.r.length,miss=(sk.r.match(/0/g)||[]).length,mr=len?miss/len:0;
+ return Math.max(0.2,1+4*mr*Math.min(1,len/4)+(due?2:0));}
+function kindWeights(S,topic,today,focusKind){
+ var w={};TP.registry[topic].kinds.forEach(function(k){w[k]=skillWeight(S.skills&&S.skills[k],today);if(focusKind&&k===focusKind)w[k]*=3;});return w;}
+function allWeights(S,today){var w={};TP.order.forEach(function(t){var tw=kindWeights(S,t,today);for(var k in tw)w[k]=Math.round(tw[k]*100)/100;});return w;}
+function topicWeight(S,t,today){var w=kindWeights(S,t,today),ks=Object.keys(w),sum=0;ks.forEach(function(k){sum+=w[k];});
+ var seen=ks.some(function(k){var sk=S.skills&&S.skills[k];return sk&&(sk.a+sk.pa)>0;});
+ return seen?sum/ks.length:1.2;}
+
+/* ---------- daily plan: 10 slots, mostly algebra (the focus topic) + 2 + 2 from the weakest-weighted other topics ---------- */
+var DAILY={algebra:6,others:[2,2]};
+function planDaily(S,o){
+ var date=o.date,n=o.total||10;
+ if(o.first){var a=[];for(var i=0;i<n;i++)a.push('algebra');return {plan:a,snap:{}};}
+ var r=QG.rngFromSeed('plan|'+date);
+ var pool=TP.order.filter(function(t){return t!=='algebra';}).map(function(t){return {t:t,w:Math.max(0.2,topicWeight(S,t,date))};});
+ var tops=[];
+ DAILY.others.forEach(function(){if(!pool.length)return;var tot=0;pool.forEach(function(p){tot+=p.w;});var x=r()*tot,idx=pool.length-1;
+  for(var i=0;i<pool.length;i++){x-=pool[i].w;if(x<0){idx=i;break;}}
+  tops.push(pool[idx].t);pool.splice(idx,1);});
+ var chosen=[];tops.forEach(function(t,i){for(var j=0;j<DAILY.others[i];j++)chosen.push(t);});
+ var rest=[];for(var k=0;k<n-1-chosen.length;k++)rest.push('algebra');
+ var mix=chosen.concat(rest);
+ for(var i2=mix.length-1;i2>0;i2--){var j2=Math.floor(r()*(i2+1));var t2=mix[i2];mix[i2]=mix[j2];mix[j2]=t2;}
+ return {plan:['algebra'].concat(mix),snap:allWeights(S,date)};}
+/* level of daily slot idx. results = boolean per answered slot so far. */
+function slotLevel(S,plan,idx,base,first,results){
+ var t=plan[idx];
+ if(t==='algebra'){var ar=[];for(var i=0;i<idx&&i<results.length;i++)if(plan[i]==='algebra')ar.push(results[i]);return QG.nextQuestionLevel(base,first,ar);}
+ return Math.max(1,Math.min(TP.registry[t].maxLevel,workLevel(S,t)));}
+function slotSeed(date,t,level,idx){return t==='algebra'?date+'|L'+level+'|q'+idx:date+'|'+t+'|L'+level+'|q'+idx;}
+/* algebra level for tomorrow, from the algebra slots only (a 6-question sample is scaled to /10 so one slip still levels up, as before) */
+function algebraNextDay(base,first,endLevel,plan,results){
+ var tot=0,c=0;plan.forEach(function(t,i){if(t==='algebra'&&i<results.length){tot++;if(results[i])c++;}});
+ var score=tot?Math.ceil(10*c/tot):0;return {score:score,tot:tot,correct:c,next:QG.nextDayLevel(base,score,first,endLevel)};}
+
+/* ---------- practice ---------- */
+function startPractice(S,topic,today,sid,focusKind){
+ var w=workLevel(S,topic);return {sid:sid,topic:topic,work:w,level:w,max:unlockedMax(S,topic),streak:0,above:0,best:0,total:0,correct:0,focus:focusKind||'',start:w,promoted:false};}
+/* record a practice answer and move the ramp. Returns {promoted} */
+function answerPractice(S,ps,o){
+ var ok=!!o.correct,lvl=o.level,ev={promoted:false};
+ applyOutcome(S,{kind:o.kind,level:lvl,correct:ok,date:o.date,sid:ps.sid,mode:'practice'});
+ ps.total++;if(ok)ps.correct++;
+ if(ok){ps.streak++;if(lvl>ps.best)ps.best=lvl;if(lvl>ps.work)ps.above++;
+  if(ps.streak>=2&&ps.level<ps.max){ps.level++;ps.streak=0;}}
+ else{ps.streak=0;ps.above=0;ps.level=Math.max(1,ps.level-1);}
+ var tp=topicOf(S,ps.topic),cap=TP.registry[ps.topic].maxLevel;
+ if(ps.above>=3&&tp.pd!==o.date&&workLevel(S,ps.topic)<cap&&workLevel(S,ps.topic)===ps.work){
+  setWorkLevel(S,ps.topic,ps.work+1);tp.pd=o.date;ps.promoted=true;ev.promoted=true;ps.above=0;}
+ return ev;}
+function practiceWeights(S,ps,today){return kindWeights(S,ps.topic,today,ps.focus);}
+
+/* ---------- reading the memory ---------- */
+function badge(sk){
+ if(!sk||(sk.a+sk.pa)===0)return {id:'new',icon:'\uD83C\uDF31',label:'New'};
+ if(sk.m)return {id:'mastered',icon:'\u2B50',label:'Mastered'};
+ var att=sk.a+sk.pa,cor=sk.c+sk.pc;
+ if(att<3)return {id:'new',icon:'\uD83C\uDF31',label:'New'};
+ if(att>=5&&cor/att>=0.8)return {id:'strong',icon:'\uD83C\uDF1F',label:'Strong'};
+ return {id:'growing',icon:'\uD83D\uDCAA',label:'Growing'};}
+function topicSummary(S,t){
+ var T=TP.registry[t],tp=(S.topics&&S.topics[t])||newTopic(),sk=T.skills.map(function(s){var k=(S.skills&&S.skills[s.id])||newSkill();
+  return {id:s.id,label:s.label,skill:s.skill,sk:k,badge:badge(k)};});
+ var mastered=sk.filter(function(x){return x.sk.m;}).length;
+ return {topic:t,name:T.name,short:T.short,emoji:T.emoji,work:workLevel(S,t),pa:tp.pa||0,pc:tp.pc||0,pb:tp.pb||0,skills:sk,mastered:mastered,total:sk.length};}
+/* weakest skills (for the "practice these" card): sorted by weight, only ones with enough evidence */
+function weakest(S,today,limit){
+ var out=[];TP.order.forEach(function(t){var w=kindWeights(S,t,today);TP.registry[t].kinds.forEach(function(k){var sk=S.skills&&S.skills[k];
+  if(!sk||(sk.a+sk.pa)<2)return;var len=sk.r.length,miss=(sk.r.match(/0/g)||[]).length;
+  if(!(w[k]>=2)&&!(miss/len>=0.34))return;out.push({kind:k,topic:t,w:w[k],rate:Math.round(100*miss/len),due:isDue(sk,today)});});});
+ out.sort(function(a,b){return b.w-a.w;});return out.slice(0,limit||3);}
+
+/* ---------- rebuild memory from saved history (for kids who started before skills were tracked) ---------- */
+function seedFromHistory(S,history,unpack){
+ S.skills={};S.topics={};
+ (history||[]).forEach(function(r){var qs=null;if(r.qz&&unpack){try{qs=unpack(r);}catch(e){qs=null;}}
+  if(qs&&qs.length){qs.forEach(function(q){if(q.userAnswer===undefined||!q.kind)return;
+    applyOutcome(S,{kind:q.kind,level:q.level,correct:q.userAnswer===q.truth,date:r.date,sid:'d'+r.date,mode:'daily'});});}
+  else{for(var k in (r.missed||{})){if(!TP.catalog[k])continue;var sk=skillOf(S,k),m=r.missed[k]|0;
+    sk.a+=m*2;sk.c+=m;sk.r=(sk.r+'0'.repeat(Math.min(m,3))).slice(-RECENT);sk.ls=r.date;sk.lm=r.date;sk.rs=0;}}});
+ return S;}
+/* compact blob that is stored on the server with each result (only what the planner needs) */
+function adaptBlob(S){ensure(S);return {skills:S.skills,topics:S.topics};}
+return {GAPS:GAPS,days:days,newSkill:newSkill,newTopic:newTopic,skillOf:skillOf,topicOf:topicOf,isDue:isDue,isMastered:isMastered,workLevel:workLevel,setWorkLevel:setWorkLevel,unlockedMax:unlockedMax,
+ applyOutcome:applyOutcome,skillWeight:skillWeight,kindWeights:kindWeights,allWeights:allWeights,topicWeight:topicWeight,planDaily:planDaily,slotLevel:slotLevel,slotSeed:slotSeed,algebraNextDay:algebraNextDay,
+ startPractice:startPractice,answerPractice:answerPractice,practiceWeights:practiceWeights,badge:badge,topicSummary:topicSummary,weakest:weakest,seedFromHistory:seedFromHistory,adaptBlob:adaptBlob,DAILY:DAILY};
+})();
+if(typeof module!=='undefined')module.exports=Engine;
+
 </script>
 <script id="app-js">
 (function(){
 'use strict';
 var G=QuizGen,TOTAL=10;
+var kl=function(k){return Topics.kindLabels[k]||G.KIND_LABELS[k]||k;};
 var API='https://lfbauhcrqfwrwlvlyysf.supabase.co/functions/v1/kid-sync';
 var KIDS=['Lillian','Christian'],LEGACY='kyleMathQuiz.v1',CACHE='kyleMathQuiz.v2.',SS='kyleMathQuiz.session';
 var app=document.getElementById('app');
@@ -386,31 +907,46 @@ function today(){return nyKey(Date.now()+skew);}
 /* ---------- storage: the server is the source of truth; localStorage is a per-kid offline cache ---------- */
 var kid=null,token=null,pending=[],memCache={};
 var SCHEMA=2;
-function blank(){return {v:SCHEMA,level:1,history:[],inProgress:null};}
+function blank(){return {v:SCHEMA,level:1,history:[],inProgress:null,skills:{},topics:{}};}
 function pct(r){return r.total?Math.round(100*r.score/r.total):0;}
 /* accepts schema v1 (old saves, maybe with no questions for old days) and v2; never throws */
 function normalize(o){
  if(!o||(o.v!==1&&o.v!==2)||!Array.isArray(o.history))return null;
- var out={v:SCHEMA,level:Math.min(10,Math.max(1,parseInt(o.level,10)||1)),history:[],inProgress:o.inProgress||null};
+ var out={v:SCHEMA,level:Math.min(10,Math.max(1,parseInt(o.level,10)||1)),history:[],inProgress:o.inProgress||null,skills:cleanSkills(o.skills),topics:cleanTopics(o.topics)};
+ if(!o.skills||typeof o.skills!=='object')out._noAdapt=true; /* saved before skills were tracked: rebuilt from history by adopt() */
  o.history.forEach(function(r){
   if(!r||typeof r.date!=='string'||typeof r.score!=='number')return;
   var n={date:r.date,startLevel:r.startLevel||1,first:!!r.first,score:r.score,total:r.total||10,missed:r.missed||{},levelAfter:r.levelAfter||r.startLevel||1,change:r.change||'same',best:r.best||0};
   if(r.texts)n.texts=r.texts;
   if(typeof r.qz==='string')n.qz=r.qz;
-  else if(Array.isArray(r.questions)&&r.questions.length){try{n.qz=G.packQuestions(r.questions);}catch(e){}}
+  else if(Array.isArray(r.questions)&&r.questions.length){try{n.qz=Topics.pack(r.questions);}catch(e){}}
   out.history.push(n);});
  return out;}
+var DRE=/^\d{4}-\d{2}-\d{2}$/;
+function num(v,hi){return Math.max(0,Math.min(hi,parseInt(v,10)||0));}
+/* the adaptive memory (per skill / per topic); never trust shape, keep only known fields */
+function cleanSkills(o){var out={};if(!o||typeof o!=='object')return out;
+ Object.keys(o).forEach(function(k){if(!Topics.catalog[k]||!o[k]||typeof o[k]!=='object')return;var x=o[k],n=Engine.newSkill();
+  ['a','c','pa','pc','s','ss','m','rs'].forEach(function(f){n[f]=num(x[f],100000);});
+  n.c=Math.min(n.c,n.a);n.pc=Math.min(n.pc,n.pa);n.m=n.m?1:0;n.rs=Math.min(3,n.rs);
+  n.sid=typeof x.sid==='string'?x.sid.slice(0,40):'';n.lm=DRE.test(x.lm)?x.lm:'';n.ls=DRE.test(x.ls)?x.ls:'';n.r=(typeof x.r==='string'&&/^[01]{0,10}$/.test(x.r))?x.r:'';
+  out[k]=n;});return out;}
+function cleanTopics(o){var out={};if(!o||typeof o!=='object')return out;
+ Topics.order.forEach(function(t){var x=o[t];if(!x||typeof x!=='object')return;var n=Engine.newTopic(),T=Topics.registry[t];
+  n.lvl=Math.max(1,Math.min(T.maxLevel,parseInt(x.lvl,10)||1));n.rec=(typeof x.rec==='string'&&/^[01]{0,6}$/.test(x.rec))?x.rec:'';
+  n.pa=num(x.pa,100000);n.pc=Math.min(num(x.pc,100000),n.pa);n.pb=Math.min(12,num(x.pb,12));n.pd=DRE.test(x.pd)?x.pd:'';out[t]=n;});return out;}
+function adopt(sto){if(sto&&sto._noAdapt){delete sto._noAdapt;try{Engine.seedFromHistory(sto,sto.history,questionsOf);}catch(e){sto.skills={};sto.topics={};}}return sto;}
 var qcache={};
 function questionsOf(r){ /* full question list for a past day, or null if none was saved */
  if(!r||!r.qz)return null;if(qcache[r.date+r.qz.length])return qcache[r.date+r.qz.length];
- try{var qs=G.unpackQuestions(r.qz);if(qs.length){qcache[r.date+r.qz.length]=qs;return qs;}}catch(e){}return null;}
+ try{var qs=Topics.unpack(r.qz);if(qs.length){qcache[r.date+r.qz.length]=qs;return qs;}}catch(e){}return null;}
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return memCache[k]||null;}}
 function lsSet(k,v){memCache[k]=v;try{localStorage.setItem(k,v);}catch(e){}}
 function lsDel(k){delete memCache[k];try{localStorage.removeItem(k);}catch(e){}}
 var store=blank();
 function save(){if(!kid)return;lsSet(CACHE+kid,JSON.stringify({store:store,pending:pending}));}
 function cacheLoad(){store=blank();pending=[];
- try{var o=JSON.parse(lsGet(CACHE+kid)||'null');if(o){var s=normalize(o.store);if(s)store=s;if(Array.isArray(o.pending))pending=o.pending;}}catch(e){}}
+ try{var o=JSON.parse(lsGet(CACHE+kid)||'null');if(o){var s=adopt(normalize(o.store));if(s)store=s;if(Array.isArray(o.pending))pending=o.pending;}}catch(e){}}
 function recFor(date){for(var i=0;i<store.history.length;i++)if(store.history[i].date===date)return store.history[i];return null;}
 function isFirst(){return store.history.length===0;}
 function prune(){var n=store.history.length;for(var i=0;i<n-3;i++){delete store.history[i].texts;}}
@@ -432,10 +968,15 @@ function setSync(st){syncState=st;
  var m={saving:'Saving\u2026',saved:'Saved \u2713',offline:'\u26A0 Offline \u2013 will save when you\u2019re back online',auth:'\uD83D\uDD12 Tap to sign in again to save',error:'\u26A0 Couldn\u2019t save \u2013 tap to retry'}[st];
  if(!kid||!m){syncEl.style.display='none';return;}
  syncEl.style.display='block';syncEl.className='sync '+st;syncEl.textContent=m;}
+function isProg(x){return !x.rec&&!x.importHistory&&!x.practice;}
 function enqueue(p,delay){
  var last=pending[pending.length-1],prog=!p.rec;
- if(p.rec){while(pending.length&&!pending[pending.length-1].rec&&!pending[pending.length-1].importHistory)pending.pop();pending.push(p);}
- else if(last&&!last.rec&&!last.importHistory){for(var k in p)last[k]=p[k];}
+ if(p.rec){while(pending.length&&isProg(pending[pending.length-1]))pending.pop();pending.push(p);}
+ else if(p.practice){ /* answers of one practice session are merged into one request (the server ignores repeats) */
+  if(last&&last.practice&&last.practice.sid===p.practice.sid&&last.practice.day===p.practice.day&&last.practice.items.length+p.practice.items.length<=50){
+   last.practice.items=last.practice.items.concat(p.practice.items);last.adapt=p.adapt;if(p.level!=null)last.level=p.level;}
+  else pending.push(p);}
+ else if(last&&isProg(last)){for(var k in p)last[k]=p[k];}
  else pending.push(p);
  save();setSync('saving');
  clearTimeout(flushTimer);flushTimer=setTimeout(flush,prog?(delay==null?1200:delay):0);}
@@ -467,50 +1008,113 @@ function btn(text,cls,fn,id){return h('button',{class:'btn '+cls,type:'button',o
 function show(nodes){keyHandler=nextKH;nextKH=null;app.innerHTML='';nodes.forEach(function(n){app.appendChild(n);});window.scrollTo(0,0);setSync(syncState);}
 function lvName(l){return 'Level '+l+' \u2013 '+G.LEVEL_NAMES[l-1];}
 function stepsList(lines){return h('ol',{class:'steps'},lines.map(function(l){return h('li',null,l);}));}
-function missedFocus(){var miss={},hs=store.history.slice(-3);
- hs.forEach(function(r,i){var w=(i===hs.length-1)?2:1;for(var k in (r.missed||{}))miss[k]=(miss[k]||0)+w*r.missed[k];});return miss;}
+/* what the planner will lean on next: the skills with the highest weight (recent misses, due for review, not mastered) */
+function focusSkills(n){return Engine.weakest(store,today(),n||2).map(function(w){return kl(w.kind);});}
 function focusText(miss){var ks=Object.keys(miss).filter(function(k){return miss[k]>0;}).sort(function(a,b){return miss[b]-miss[a];}).slice(0,2);
- return ks.map(function(k){return G.KIND_LABELS[k];});}
+ return ks.map(kl);}
 function dayStreak(){var d=today(),n=0,dates={};store.history.forEach(function(r){dates[r.date]=1;});
  var cur=new Date(d+'T12:00:00');if(!dates[d])cur.setDate(cur.getDate()-1);
  while(dates[G.dateKey(cur)]){n++;cur.setDate(cur.getDate()-1);}return n;}
 function logoutBtn(){return btn('\uD83D\uDD04 Switch kid / log out','gray',logout,'logout');}
 function parentCorner(){
  var rows=store.history.slice().reverse().map(function(r){return h('tr',null,h('td',null,r.date),h('td',null,String(r.startLevel)),h('td',null,r.score+'/'+r.total),h('td',null,pct(r)+'%'),
-  h('td',null,Object.keys(r.missed||{}).map(function(k){return G.KIND_LABELS[k]+' ('+r.missed[k]+')';}).join(', ')||'\u2014'));});
+  h('td',null,Object.keys(r.missed||{}).map(function(k){return kl(k)+' ('+r.missed[k]+')';}).join(', ')||'\u2014'));});
  var sel=h('select',{id:'lvlsel'},G.LEVEL_NAMES.map(function(n,i){var o=h('option',{value:String(i+1)},'Level '+(i+1)+' \u2013 '+n);if(i+1===store.level)o.selected=true;return o;}));
  return h('details',{class:'parent'},h('summary',null,'\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC66 Parent corner'),
   h('div',{class:'card'},
    h('p',null,(kid?kid+': ':'')+'current level: '+lvName(store.level)+'. Days played: '+store.history.length+(store.history.length?'. Average: '+avgPct()+'%.':'.')),
    rows.length?h('table',null,h('tr',null,h('th',null,'Date'),h('th',null,'Start lvl'),h('th',null,'Score'),h('th',null,'%'),h('th',null,'Missed')),rows):h('p',{class:'small'},'No quizzes yet.'),
-   h('p',{class:'small'},'How it works: 9\u201310 right \u2192 next day goes up a level. 7\u20138 \u2192 stay. 5\u20136 \u2192 stay and practice the missed question types. 4 or fewer \u2192 down one level. Inside a quiz, 3 right in a row makes questions harder and a miss makes the next one easier. Each day\u2019s score is final and saved to the cloud under '+(kid||'the kid')+'\u2019s name.'),
-   h('p',null,'Change the starting level for the next quiz:'),sel,
+   h('p',{class:'small'},'How levels work: 9\u201310 right \u2192 next day goes up a level. 7\u20138 \u2192 stay. 5\u20136 \u2192 stay and practice the missed question types. 4 or fewer \u2192 down one level. Inside a quiz, 3 right in a row makes questions harder and a miss makes the next one easier. The algebra level moves on the algebra questions only (scaled to 10, so one slip still levels up). Each day\u2019s score is final and saved to the cloud under '+(kid||'the kid')+'\u2019s name.'),
+   h('p',{class:'small',id:'mixnote'},'Daily mix: every daily quiz has 10 questions: 6 algebra (the main topic) + 2 + 2 from two other topics (number sense, times tables, fractions), picked by who needs them most (recent misses, skills due for review, not yet mastered). The very first quiz is all algebra. Practice: your kid picks the topic; it gets harder after 2 right in a row and easier after a miss, and 3 right above the current level unlocks that level for the daily quiz. Practice never changes the daily score or average, but every answer (daily or practice) feeds tomorrow\u2019s mix: missed skills come back after 1, 3 and 7 days, and a skill counts as Mastered after 3 right in a row across at least 2 sessions, then shows up less.'),
+   h('table',{id:'topictable'},h('tr',null,h('th',null,'Topic'),h('th',null,'Level'),h('th',null,'Practiced'),h('th',null,'Right'),h('th',null,'Mastered')),
+    Topics.order.map(function(t){var r=Engine.topicSummary(store,t,today());return h('tr',null,h('td',null,r.short),h('td',null,String(r.work)),h('td',null,String(r.pa)),h('td',null,r.pa?Math.round(100*r.pc/r.pa)+'%':'\u2014'),h('td',null,r.mastered+'/'+r.total));})),
+   h('p',null,'Change the algebra starting level for the next quiz:'),sel,
    btn('Save level','blue',function(){store.level=parseInt(document.getElementById('lvlsel').value,10);save();enqueue({level:store.level},0);render();}),
    h('p',{class:'small',id:'pinnote'},'Parent: to reset a forgotten PIN, ask Kyle\u2019s assistant.')));}
 /* ---------- quiz engine ---------- */
-var Q=null;
+var Q=null,batchSize=5;
 function recentTexts(){var out=[];store.history.slice(-3).forEach(function(r){(r.texts||[]).forEach(function(t){out.push(t);});});return out;}
 function levelsSoFar(){return Q.answers.map(function(a,i){return a===Q.qs[i].truth;});}
+function isPractice(){return Q&&Q.mode==='practice';}
+function perScreen(){return isPractice()?Q.B:TOTAL;}
+function posInScreen(){return isPractice()?Q.idx%Q.B:Q.idx;}
+function lastOfScreen(){return posInScreen()>=perScreen()-1;}
+function topicName(t){return Topics.registry[t]?Topics.registry[t].short:t;}
+function topicLevelName(t,l){var T=Topics.registry[t];return 'Level '+l+(T&&T.levelNames[l-1]?' \u2013 '+T.levelNames[l-1]:'');}
 function ensureQuestion(){
  if(Q.qs[Q.idx])return;
  if(Q.mode==='retry')return;
- var level=G.nextQuestionLevel(Q.base,Q.first,levelsSoFar().slice(0,Q.idx));
- var seed=Q.mode==='daily'?(Q.date+'|L'+level+'|q'+Q.idx):('practice|'+Q.nonce+'|L'+level+'|q'+Q.idx);
- var avoid=Q.qs.map(function(q){return q.text;}).concat(recentTexts());
- Q.qs[Q.idx]=G.makeQuestion({seed:seed,level:level,wantTrue:Q.sched[Q.idx],miss:Q.miss,avoid:avoid});}
+ var avoid=Q.qs.map(function(q){return q.text;}).concat(recentTexts()),q;
+ if(Q.mode==='daily'){
+  var t=Q.plan[Q.idx],results=levelsSoFar().slice(0,Q.idx);
+  var level=t==='algebra'?Engine.slotLevel(store,Q.plan,Q.idx,Q.base,Q.first,results):Math.max(1,Math.min(Topics.maxLevelOf(t),(Q.wl&&Q.wl[t])||1));
+  q=Topics.make(t,{seed:Engine.slotSeed(Q.date,t,level,Q.idx),level:level,wantTrue:Q.sched[Q.idx],weights:Q.first?null:Q.snap,avoid:avoid});}
+ else{ /* practice: the ramp decides the level; weights favour this topic's weak skills (and the focus skill) */
+  var ps=Q.ps;
+  q=Topics.make(Q.topic,{seed:'practice|'+Q.nonce+'|'+Q.topic+'|L'+ps.level+'|q'+Q.idx,level:ps.level,wantTrue:Q.sched[Q.idx%10],weights:Engine.practiceWeights(store,ps,Q.date),avoid:avoid.slice(-30)});}
+ Q.qs[Q.idx]=q;}
 function persist(){if(Q.mode!=='daily')return;
- store.inProgress={date:Q.date,base:Q.base,first:Q.first,sched:Q.sched,qs:Q.qs,answers:Q.answers,streak:Q.streak,best:Q.best};save();enqueue({inProgress:store.inProgress});}
+ store.inProgress={date:Q.date,base:Q.base,first:Q.first,sched:Q.sched,plan:Q.plan,snap:Q.snap,wl:Q.wl,qs:Q.qs,answers:Q.answers,streak:Q.streak,best:Q.best};save();enqueue({inProgress:store.inProgress});}
+function workLevels(){var o={};Topics.order.forEach(function(t){o[t]=Engine.workLevel(store,t);});return o;}
 function startQuiz(mode,fixedQs){
  var date=today();
  if(mode==='daily'&&recFor(date)){render();return;} /* today's score is final */
- Q={mode:mode,date:date,base:store.level,first:mode==='daily'&&isFirst(),sched:G.schedule(date+'|'+store.level+'|'+mode+(mode==='practice'?Date.now():'')),
-  qs:fixedQs?fixedQs.map(function(q){return q;}):[],answers:[],idx:0,streak:0,best:0,nonce:String(Date.now()),miss:missedFocus()};
- if(mode==='practice')Q.first=false;
+ var first=mode==='daily'&&isFirst();
+ Q={mode:mode,date:date,base:store.level,first:first,sched:G.schedule(date+'|'+store.level+'|'+mode),
+  qs:fixedQs?fixedQs.map(function(q){return q;}):[],answers:[],idx:0,streak:0,best:0,nonce:String(Date.now())};
+ if(mode==='daily'){var pl=Engine.planDaily(store,{date:date,first:first,total:TOTAL});Q.plan=pl.plan;Q.snap=pl.snap;Q.wl=workLevels();}
  renderQuestion();}
 function resumeDaily(){var ip=store.inProgress;
- Q={mode:'daily',date:ip.date,base:ip.base,first:ip.first,sched:ip.sched,qs:ip.qs,answers:ip.answers,idx:ip.answers.length,streak:ip.streak,best:ip.best,nonce:'',miss:missedFocus()};
+ var plan=Array.isArray(ip.plan)&&ip.plan.length===TOTAL?ip.plan:Array.apply(null,Array(TOTAL)).map(function(){return 'algebra';}); /* quizzes started before topics existed were all algebra */
+ Q={mode:'daily',date:ip.date,base:ip.base,first:ip.first,sched:ip.sched,plan:plan,snap:ip.snap||{},wl:ip.wl||workLevels(),qs:ip.qs.map(Topics.decorate),answers:ip.answers,idx:ip.answers.length,streak:ip.streak,best:ip.best,nonce:''};
  Q.qs=Q.qs.slice(0,Q.answers.length);
  if(Q.idx>=TOTAL)finishQuiz();else renderQuestion();}
+/* ---------- practice sessions: the kid picks a topic; batches of 5 or 10; the level ramps up with success ---------- */
+function newSid(){return 'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function masteredSet(){var o={};Object.keys(Topics.catalog).forEach(function(k){var s=store.skills[k];if(s&&s.m)o[k]=1;});return o;}
+function startPracticeSession(topic,focusKind){
+ var ps=Engine.startPractice(store,topic,today(),newSid(),focusKind);
+ Q={mode:'practice',date:today(),topic:topic,ps:ps,B:batchSize,batch:1,sched:G.schedule('practice|'+Date.now()+'|'+topic),qs:[],answers:[],notes:[],idx:0,streak:0,best:0,nonce:String(Date.now()),m0:masteredSet(),bStart:0};
+ renderQuestion();}
+function recordPractice(q,val,ok){
+ var ps=Q.ps,before=ps.level,lv0=Engine.workLevel(store,Q.topic);
+ var ev=Engine.answerPractice(store,ps,{kind:q.kind,level:q.level,correct:ok,date:Q.date});
+ var note='';
+ if(ev.promoted)note='\uD83C\uDF89 You unlocked '+topicLevelName(Q.topic,Engine.workLevel(store,Q.topic))+' for your daily quiz!';
+ else if(ps.level>before)note='\u2B06\uFE0F Level up! Your next one is Level '+ps.level+'.';
+ else if(ps.level<before)note='\uD83D\uDD3D Let\u2019s try a slightly easier one next, then climb back up.';
+ Q.notes[Q.idx]=note;
+ var item={seq:Q.idx+1,batch:Q.batch,kind:q.kind,level:q.level,truth:q.truth,answer:val,text:String(q.text).slice(0,400),ts:Date.now()+skew};
+ var p={practice:{sid:ps.sid,day:Q.date,items:[item]},adapt:JSON.parse(JSON.stringify(Engine.adaptBlob(store)))};
+ if(Q.topic==='algebra'&&Engine.workLevel(store,'algebra')!==lv0)p.level=store.level;
+ enqueue(p);}
+function renderPracticeHome(){
+ Q=null;var today_=today();
+ var cards=Topics.order.map(function(t){var T=Topics.registry[t],sm=Engine.topicSummary(store,t,today_);
+  var sub=sm.pa?(sm.pa+' practiced \u00B7 best Level '+sm.pb+' \u00B7 \u2B50 '+sm.mastered+'/'+sm.total):'Not tried yet \u2013 give it a go!';
+  return h('button',{class:'btn topic',type:'button',id:'pt-'+t,onclick:function(){startPracticeSession(t);}},
+   h('span',{class:'te'},T.emoji),h('span',{class:'tt'},h('b',null,T.name),h('small',null,topicLevelName(t,sm.work)+' \u2022 '+sub)));});
+ var b5=h('button',{class:'seg'+(batchSize===5?' on':''),type:'button',id:'bs5',onclick:function(){batchSize=5;renderPracticeHome();}},'5 questions'),
+     b10=h('button',{class:'seg'+(batchSize===10?' on':''),type:'button',id:'bs10',onclick:function(){batchSize=10;renderPracticeHome();}},'10 questions');
+ show([h('h1',null,'\uD83D\uDCAA Practice'),
+  h('div',{class:'card pop'},h('p',{class:'msg'},'Pick a topic. Questions get harder as you get them right, and easier after a miss, so you always learn at just the right level.'),
+   h('p',{class:'small',style:'text-align:center'},'How many in a round?'),h('div',{class:'segs'},b5,b10),
+   h('div',{id:'topics'},cards),
+   h('p',{class:'small',style:'text-align:center'},'Practice never changes your daily score. But what you practice helps pick tomorrow\u2019s questions!'),
+   btn('\u2B05 Back','gray',render,'pback'))]);}
+function renderBatch(){
+ var from=Q.idx-Q.B+1,n=0;for(var i=from;i<=Q.idx;i++)if(Q.answers[i]===Q.qs[i].truth)n++;
+ var ps=Q.ps,newM=[];Object.keys(Topics.catalog).forEach(function(k){var s=store.skills[k];if(s&&s.m&&!Q.m0[k])newM.push(kl(k));});
+ var msg=n===Q.B?'PERFECT round! \uD83E\uDD29':n>=Q.B*0.8?'Amazing! \uD83C\uDF1F':n>=Q.B*0.6?'Nice work! \uD83D\uDE0A':'Good effort \u2013 every try makes you stronger! \uD83C\uDF31';
+ var lines=[h('p',{class:'big',id:'bscore'},n+' / '+Q.B),h('p',{class:'msg'},msg),
+  h('p',{id:'blevel'},'\uD83D\uDCC8 You reached '+topicLevelName(Q.topic,ps.best||ps.level)+' this session'+(ps.start<(ps.best||ps.level)?' (you started at Level '+ps.start+')':'')+'. Next question: Level '+ps.level+'.'),
+  h('p',{class:'small'},'Session so far: '+ps.correct+' of '+ps.total+' right ('+Math.round(100*ps.correct/Math.max(1,ps.total))+'%).')];
+ if(ps.promoted)lines.push(h('div',{class:'msg',id:'promo'},'\uD83C\uDF89 You unlocked '+topicLevelName(Q.topic,Engine.workLevel(store,Q.topic))+' for your daily quiz!'));
+ if(newM.length)lines.push(h('div',{class:'msg',id:'newmastery'},'\u2B50 Mastered: '+newM.join(', ')+'! You got it right three times in a row. We\u2019ll show it less often now.'));
+ show([h('h1',null,'Round done!'),h('div',{class:'card pop'},lines,
+  btn('Keep going (' +Q.B+' more) \u27A1','go',function(){Q.batch++;Q.idx++;Q.bStart=Q.idx;renderQuestion();},'keepgoing'),
+  btn('\uD83D\uDD00 Switch topic','blue',renderPracticeHome,'switchtopic'),
+  btn('\u2705 I\u2019m done','gray',render,'pdone'))]);}
 function renderReminder(){
  Q=null;
  show([h('h1',null,'\u270B Before you start'),
@@ -518,66 +1122,80 @@ function renderReminder(){
    h('div',{class:'msg',id:'reminder'},'Take your time, think carefully. Your final score is final: once you answer, you can\u2019t change it. No cheating, do your own best work!'),
    btn('I\u2019m ready','go',function(){startQuiz('daily');},'ready'),
    btn('\u2B05 Back','gray',render,'reminderback'))]);}
+/* ANSWER MODES: how a question is answered. 'tf' = tap True/False (today). FUTURE ("show your work"): add a 'work' mode here that renders a
+   text area for the steps + a final-answer box and calls answer(val,{work:text}) (extend answer(val,extra) to keep extra.work with the answer); set q.answerMode='work' on written-problem kinds
+   (see ROADMAP.md). Nothing else in the quiz flow has to change. */
+var ANSWER_MODES={
+ tf:function(q,answered){return [h('div',{class:'ask'},'True or False?'),
+  h('div',{class:'tf'},
+   h('button',{class:'btn t',type:'button',id:'btnT',disabled:answered?'disabled':null,onclick:function(){answer(true);}},'\u2714 True'),
+   h('button',{class:'btn f',type:'button',id:'btnF',disabled:answered?'disabled':null,onclick:function(){answer(false);}},'\u2718 False'))];}
+};
+function disableAnswerButtons(){['btnT','btnF'].forEach(function(id){var b=document.getElementById(id);if(b)b.disabled=true;});}
 function renderQuestion(){
- ensureQuestion();var q=Q.qs[Q.idx];var answered=Q.answers[Q.idx]!==undefined;
- var title={daily:'Daily Quiz',practice:'Practice time',retry:'Practice again'}[Q.mode];
+ ensureQuestion();var q=Q.qs[Q.idx];var answered=Q.answers[Q.idx]!==undefined,tot=perScreen(),pos=posInScreen();
+ var title={daily:'Daily Quiz',practice:'Practice: '+topicName(Q.topic||''),retry:'Practice again'}[Q.mode];
+ var long=q.stmt.length>30;
+ var pills=[h('span',{class:'pill'},'Question '+(pos+1)+' of '+tot),h('span',{class:'pill',id:'streak'},'\uD83D\uDD25 Streak: '+Q.streak),h('span',{class:'pill',id:'lvpill'},'Level '+q.level)];
+ if(isPractice())pills.push(h('span',{class:'pill',id:'sesslv'},'\uD83D\uDCC8 Best: Level '+(Q.ps.best||q.level)));
  var nodes=[h('h1',null,title),
   h('div',{class:'card pop'},
-   h('div',{class:'top'},h('span',{class:'pill'},'Question '+(Q.idx+1)+' of '+TOTAL),h('span',{class:'pill',id:'streak'},'\uD83D\uDD25 Streak: '+Q.streak),h('span',{class:'pill'},'Level '+q.level)),
-   h('div',{class:'progress',role:'progressbar','aria-valuemin':'0','aria-valuemax':String(TOTAL),'aria-valuenow':String(Q.idx+(answered?1:0))},h('i',{style:'width:'+((Q.idx+(answered?1:0))/TOTAL*100)+'%'})),
-   h('div',{class:'if'},'If '+q.vn+' = '+q.p+', is this true?'),
-   h('div',{class:'eq',id:'eq'},q.eq),
-   h('div',{class:'ask'},'True or False?'),
-   h('div',{class:'tf'},
-    h('button',{class:'btn t',type:'button',id:'btnT',disabled:answered?'disabled':null,onclick:function(){answer(true);}},'\u2714 True'),
-    h('button',{class:'btn f',type:'button',id:'btnF',disabled:answered?'disabled':null,onclick:function(){answer(false);}},'\u2718 False')),
+   h('div',{class:'top'},pills),
+   h('div',{class:'progress',role:'progressbar','aria-valuemin':'0','aria-valuemax':String(tot),'aria-valuenow':String(pos+(answered?1:0))},h('i',{style:'width:'+((pos+(answered?1:0))/tot*100)+'%'})),
+   (Q.mode!=='daily'||q.topic!=='algebra')?h('div',{class:'tag',id:'qtag'},Topics.registry[q.topic]?Topics.registry[q.topic].emoji+' '+Topics.registry[q.topic].short+' \u00B7 '+(q.label||''):''):null,
+   q.prompt?h('div',{class:'if',id:'prompt'},q.prompt):null,
+   h('div',{class:'eq'+(long?' txt':''),id:'eq'},q.stmt),
+   ANSWER_MODES[q.answerMode||'tf'](q,answered),
    h('div',{id:'fb'}))];
  show(nodes);
- if(Q.mode!=='daily')nodes[1].appendChild(h('p',{class:'small'},Q.mode==='practice'?'Practice questions don\u2019t change your daily record.':'This is just practice \u2013 it doesn\u2019t change your saved score.'));
+ if(Q.mode==='retry')nodes[1].appendChild(h('p',{class:'small'},'This is just practice \u2013 it doesn\u2019t change your saved score.'));
+ if(isPractice())nodes[1].appendChild(h('p',{class:'small'},'Practice questions don\u2019t change your daily score \u2013 they help pick tomorrow\u2019s questions.'));
  if(answered)renderFeedback();}
 function answer(val){
  if(Q.answers[Q.idx]!==undefined)return;var q=Q.qs[Q.idx];Q.answers[Q.idx]=val;var ok=(val===q.truth);
  if(ok){Q.streak++;if(Q.streak>Q.best)Q.best=Q.streak;}else Q.streak=0;
- persist();document.getElementById('btnT').disabled=true;document.getElementById('btnF').disabled=true;
+ if(isPractice())recordPractice(q,val,ok);
+ persist();disableAnswerButtons();
  var st=document.getElementById('streak');st.textContent='\uD83D\uDD25 Streak: '+Q.streak;
- var bar=document.querySelector('.progress i');bar.style.width=((Q.idx+1)/TOTAL*100)+'%';
+ var sl=document.getElementById('sesslv');if(sl)sl.textContent='\uD83D\uDCC8 Best: Level '+(Q.ps.best||q.level);
+ var bar=document.querySelector('.progress i');bar.style.width=((posInScreen()+1)/perScreen()*100)+'%';
  renderFeedback();}
 var CHEERS=['Awesome!','Nice one!','You got it!','Brilliant!','Super!','Way to go!','Yes!','Math star!'];
 function renderFeedback(){var q=Q.qs[Q.idx],val=Q.answers[Q.idx],ok=(val===q.truth),box=document.getElementById('fb');box.innerHTML='';
- var last=(Q.idx>=TOTAL-1);
- var next=btn(last?'See my results \uD83C\uDF89':'Next question \u27A1','go',function(){if(last)finishQuiz();else{Q.idx++;renderQuestion();}},'next');
- var fb;
+ var last=lastOfScreen();
+ var next=btn(last?(isPractice()?'See my round \uD83C\uDF89':'See my results \uD83C\uDF89'):'Next question \u27A1','go',function(){if(last){if(isPractice())renderBatch();else finishQuiz();}else{Q.idx++;renderQuestion();}},'next');
+ var fb,note=isPractice()&&Q.notes[Q.idx]?h('p',{class:'lvnote',id:'lvnote'},Q.notes[Q.idx]):null;
  if(ok){var extra=Q.streak>=5?' \uD83D\uDD25 '+Q.streak+' in a row!':Q.streak===3?' \uD83D\uDD25 3 in a row!':'';
-  fb=h('div',{class:'fb good pop',id:'good'},h('h3',null,'\u2705 '+CHEERS[(Q.idx*3+q.level)%CHEERS.length]+' Correct!'+extra),h('p',null,q.shortExpl));}
+  fb=h('div',{class:'fb good pop',id:'good'},h('h3',null,'\u2705 '+CHEERS[(Q.idx*3+q.level)%CHEERS.length]+' Correct!'+extra),h('p',null,q.shortExpl),note);}
  else{
   var said=val?'True':'False',really=q.truth?'True':'False';
   fb=h('div',{class:'fb try pop',id:'wrong'},
    h('h3',null,'\uD83D\uDCAA Great try! Let\u2019s figure it out together.'),
    h('p',null,'You tapped '+said+', but the answer is '+really+'. Here\u2019s why:'),
-   h('h3',null,'\uD83D\uDD0C Step 1: Plug it in'),
-   h('p',{class:'small'},'Swap the letter for the number, then do the math on each side.'),stepsList(q.plug),
-   h('h3',null,'\uD83D\uDD0D Step 2: What should '+q.vn+' really be?'),
-   h('p',{class:'small'},'Undo the steps backwards using opposite operations.'),stepsList(q.undo),
-   h('div',{class:'tip'},'\uD83D\uDCA1 '+q.tip),
-   h('p',null,'Mistakes are how brains grow. You\u2019ve got this! \uD83C\uDF31'));}
+   Topics.sectionsOf(q).map(function(s){return [h('h3',null,s.t),s.h?h('p',{class:'small'},s.h):null,stepsList(s.l)];}),
+   q.tip?h('div',{class:'tip'},'\uD83D\uDCA1 '+q.tip):null,
+   h('p',null,'Mistakes are how brains grow. You\u2019ve got this! \uD83C\uDF31'),note);}
  box.appendChild(fb);box.appendChild(next);
  setTimeout(function(){try{box.scrollIntoView({behavior:'smooth',block:'nearest'});}catch(e){}},50);}
 /* ---------- finishing ---------- */
+function withAnswers(){return Q.qs.map(function(q,i){var c={};for(var k in q)c[k]=q[k];c.userAnswer=Q.answers[i];return c;});}
 function finishQuiz(){
  var results=levelsSoFar(),score=results.filter(Boolean).length,missed={};
  Q.qs.forEach(function(q,i){if(!results[i])missed[q.kind]=(missed[q.kind]||0)+1;});
  if(Q.mode==='daily'){
-  var endLevel=G.nextQuestionLevel(Q.base,Q.first,results);
-  var nd=G.nextDayLevel(Q.base,score,Q.first,endLevel);
+  var algRes=results.filter(function(x,i){return Q.plan[i]==='algebra';});
+  var endLevel=G.nextQuestionLevel(Q.base,Q.first,algRes);
+  var nd=Engine.algebraNextDay(Q.base,Q.first,endLevel,Q.plan,results).next; /* the algebra level moves on the algebra questions only */
   var rec={date:Q.date,startLevel:Q.base,first:Q.first,score:score,total:TOTAL,missed:missed,levelAfter:nd.level,change:nd.change,best:Q.best,
-   texts:Q.qs.map(function(q){return q.text;}),qz:G.packQuestions(Q.qs.map(function(q,i){var c={};for(var k in q)c[k]=q[k];c.userAnswer=Q.answers[i];return c;}))};
-  var resQ=Q.qs.map(function(q,i){return {kind:q.kind,level:q.level,text:q.text,truth:q.truth,answer:Q.answers[i]};});
-  if(!recFor(Q.date)){store.history.push(rec);store.level=nd.level;store.inProgress=null;prune();save();
-   enqueue({rec:rec,result:{questions:resQ},level:nd.level});
+   texts:Q.qs.map(function(q){return q.text;}),qz:Topics.pack(withAnswers())};
+  var resQ=Q.qs.map(function(q,i){return {kind:q.kind,level:q.level,text:String(q.text).slice(0,400),truth:q.truth,answer:Q.answers[i]};});
+  if(!recFor(Q.date)){
+   Q.qs.forEach(function(q,i){Engine.applyOutcome(store,{kind:q.kind,level:q.level,correct:results[i],date:Q.date,sid:'d'+Q.date,mode:'daily'});}); /* the daily answers feed the same memory as practice */
+   store.history.push(rec);store.level=nd.level;store.inProgress=null;prune();save();
+   enqueue({rec:rec,result:{questions:resQ},level:nd.level,adapt:JSON.parse(JSON.stringify(Engine.adaptBlob(store)))});
    flush().then(function(){if(lostRace){lostRace=false;resync(true);}});}
   renderResults(recFor(Q.date)||rec,'daily');}
- else{renderResults({date:Q.date,startLevel:Q.base,score:score,total:TOTAL,missed:missed,best:Q.best,
-   questions:Q.qs.map(function(q,i){var c={};for(var k in q)c[k]=q[k];c.userAnswer=Q.answers[i];return c;})},Q.mode);}}
+ else{renderResults({date:Q.date,startLevel:Q.base,score:score,total:TOTAL,missed:missed,best:Q.best,questions:withAnswers()},Q.mode);}}
 function levelMsg(rec){var n=rec.levelAfter;
  if(rec.change==='placement')return '\uD83C\uDFAF That was your first quiz, so it started easy and climbed. Tomorrow we\u2019ll start at '+lvName(n)+'.';
  if(rec.change==='up')return '\uD83C\uDF89 LEVEL UP! Tomorrow you start '+lvName(n)+'. Great job!';
@@ -587,20 +1205,26 @@ function levelMsg(rec){var n=rec.levelAfter;
  var f=focusText(rec.missed);return '\uD83D\uDC4D You\u2019ll stay at '+lvName(n)+' tomorrow.'+(f.length?' We\u2019ll practice '+f.join(' and ')+' a bit more.':' Keep it up!');}
 function scoreMsg(s){return s===10?'PERFECT! \uD83E\uDD29':s>=9?'Amazing! \uD83C\uDF1F':s>=7?'Great job! \uD83D\uDE0A':s>=5?'Nice work! Keep going! \uD83D\uDCAA':'Good effort! Every try makes you stronger! \uD83C\uDF31';}
 function reviewList(rec){return (rec.questions||questionsOf(rec)||[]).map(function(q,i){var ok=q.userAnswer===q.truth;
- var d=h('details',{class:'rev '+(ok?'ok':'no')},h('summary',null,(ok?'\u2705 ':'\uD83D\uDFE0 ')+(i+1)+'. If '+q.vn+' = '+q.p+':  '+q.eq+'  \u2192 '+(q.truth?'True':'False')),
+ var d=h('details',{class:'rev '+(ok?'ok':'no')},h('summary',null,(ok?'\u2705 ':'\uD83D\uDFE0 ')+(i+1)+'. '+(q.topic&&q.topic!=='algebra'&&Topics.registry[q.topic]?Topics.registry[q.topic].emoji+' ':'')+Topics.headOf(q)+'  \u2192 '+(q.truth?'True':'False')),
   h('div',{class:'inner'},h('p',null,'You said '+(q.userAnswer?'True':'False')+'. '+q.shortExpl),
-   ok?null:[h('h3',null,'Plug it in'),stepsList(q.plug),h('h3',null,'What should '+q.vn+' be?'),stepsList(q.undo),h('div',{class:'tip'},'\uD83D\uDCA1 '+q.tip)]));return d;});}
+   ok?null:[Topics.sectionsOf(q).map(function(sc){return [h('h3',null,sc.t),stepsList(sc.l)];}),q.tip?h('div',{class:'tip'},'\uD83D\uDCA1 '+q.tip):null]));return d;});}
+/* "Algebra 5/6 / Fractions 1/2" for a finished quiz */
+function topicBreakdown(rec){var qs=rec.questions||questionsOf(rec);if(!qs)return null;var by={},order=[];
+ qs.forEach(function(q){var t=q.topic||'algebra';if(!by[t]){by[t]={n:0,c:0};order.push(t);}by[t].n++;if(q.userAnswer===q.truth)by[t].c++;});
+ if(order.length<2)return null;
+ return h('p',{class:'small',id:'bytopic',style:'text-align:center'},order.map(function(t){return (Topics.registry[t]?Topics.registry[t].emoji+' '+Topics.registry[t].short:t)+' '+by[t].c+'/'+by[t].n;}).join('  \u00B7  '));}
 function renderResults(rec,mode){
  var stars=rec.score>=9?'\u2B50\u2B50\u2B50':rec.score>=7?'\u2B50\u2B50':rec.score>=5?'\u2B50':'\uD83C\uDF31';
  var nodes=[h('h1',null,mode==='daily'?'Quiz complete!':mode==='practice'?'Practice done!':'Practice done!'),
   h('div',{class:'card pop'},h('div',{class:'big'},rec.score+' / '+rec.total),h('div',{style:'text-align:center;font-size:30px;font-weight:900;color:#00b894'},pct(rec)+'%'),h('div',{class:'stars'},stars),h('h2',{style:'text-align:center'},scoreMsg(rec.score)),
+   topicBreakdown(rec),
    rec.best?h('p',{style:'text-align:center'},'\uD83D\uDD25 Best streak: '+rec.best):null,
    mode==='daily'?h('div',{class:'msg',id:'levelmsg'},levelMsg(rec)):h('div',{class:'msg'},'This was just for fun \u2013 your saved daily score didn\u2019t change.'),
-   (mode==='daily'&&Object.keys(rec.missed).length)?h('p',null,'Types to keep practicing: '+Object.keys(rec.missed).map(function(k){return G.KIND_LABELS[k];}).join(', ')+'.'):null,
+   (mode==='daily'&&Object.keys(rec.missed).length)?h('p',null,'Types to keep practicing: '+Object.keys(rec.missed).map(function(k){return kl(k);}).join(', ')+'.'):null,
    mode==='daily'?h('div',{class:'tip'},'\uD83D\uDCC5 Today\u2019s score is saved and final. Come back tomorrow for a brand-new set of 10 questions!'):null),
   h('div',{class:'card'},h('h2',null,'\uD83D\uDCCB Review today\u2019s questions'),h('p',{class:'small'},'Tap a question to see how it works.'),reviewList(rec),
    (mode==='daily'||mode==='retry')&&todayRec()?btn('\uD83D\uDD01 Practice today\u2019s questions again (score stays the same)','blue',function(){var r=todayRec(),qs=r&&questionsOf(r);if(qs){startQuiz('retry',qs.map(function(q){var c={};for(var k in q)c[k]=q[k];delete c.userAnswer;return c;}));}}):null,
-   btn('\uD83D\uDCAA Practice more','alt',function(){startQuiz('practice');}),
+   btn('\uD83D\uDCAA Practice more','alt',renderPracticeHome,'practicemore'),
    histBtn(),
    mode!=='daily'?btn('\u2B05 Back to home','gray',render):null),
   logoutBtn(),parentCorner()];
@@ -636,32 +1260,30 @@ function trendMsg(){var hs=store.history,n=hs.length;if(n<2)return 'Play a few m
  var recent=hs.slice(-7),prior=hs.slice(-14,-7);function av(a){var t=0;a.forEach(function(r){t+=pct(r);});return t/a.length;}
  var a,b;if(prior.length){a=av(recent);b=av(prior);}else{a=pct(hs[n-1]);b=pct(hs[0]);}
  var d=a-b;return d>=5?'\uD83D\uDCC8 You\u2019re getting stronger \u2013 your scores are going up!':d<=-5?'\uD83D\uDCAA Scores dipped a little. That\u2019s how we learn \u2013 keep going!':'\uD83D\uDE0E Steady and strong. Keep it up!';}
-/* ---------- areas to work on (misses per question type over time) ---------- */
-var TIPS={addsub:'When a number is added, subtract it from the other side to undo it. When it is subtracted, add it back.',
- muldiv:'Use your times tables backwards: \u00F7 undoes \u00D7, and \u00D7 undoes \u00F7. Try 3 quick fact drills!',
- twostep:'Undo the steps in reverse order: first the + or \u2212, then the \u00D7 or \u00F7.',
- parens:'Do the math inside the parentheses FIRST, then the rest of the equation.',
- both:'Plug the number into BOTH sides, work each side out, and see if they match.',
- order:'Order of operations: \u00D7 and \u00F7 come before + and \u2212. Do those first!',
- multi:'Go slow. Do one step at a time and say each step out loud (or write it down).'};
-function weakAreas(){
- var st={};
- store.history.forEach(function(r){var qs=questionsOf(r);
-  if(qs&&qs.length){qs.forEach(function(q){var s=st[q.kind]||(st[q.kind]={att:0,miss:0});s.att++;if(q.userAnswer!==q.truth)s.miss++;});}
-  else for(var k in (r.missed||{})){var s=st[k]||(st[k]={att:0,miss:0});s.miss+=r.missed[k];s.att+=r.missed[k]*2;}}); /* old days w/o questions: assume about half were missed */
- return Object.keys(st).filter(function(k){return st[k].miss>0&&G.KIND_LABELS[k];}).map(function(k){var s=st[k];return {kind:k,att:s.att,miss:s.miss,rate:Math.round(100*s.miss/s.att)};})
-  .sort(function(a,b){return b.rate-a.rate||b.miss-a.miss;}).slice(0,3);}
+/* ---------- areas to work on: the skills the adaptive memory says are weakest (daily + practice together) ---------- */
 function weakCard(){
- var wa=weakAreas();
+ var wa=Engine.weakest(store,today(),3);
  return h('div',{class:'card',id:'weak'},h('h2',null,'\uD83C\uDFAF Areas to work on'),
-  !store.history.length?h('p',null,'Finish a quiz and we\u2019ll show which kinds of questions to practice.')
+  !(store.history.length||Object.keys(store.skills).length)?h('p',null,'Finish a quiz and we\u2019ll show which kinds of questions to practice.')
   :!wa.length?h('p',null,'\uD83C\uDF1F No weak spots so far \u2013 you\u2019re doing great on every type!')
-  :[h('p',{class:'small'},'These are the question types you miss most, across all your quizzes:'),
-    wa.map(function(w){return h('div',{class:'weak'},h('div',{class:'l1'},h('span',null,G.KIND_LABELS[w.kind]),h('span',{class:'pct',style:'color:#d63031'},w.rate+'% missed')),
-     h('div',{class:'progress'},h('i',{style:'width:'+w.rate+'%;background:#ff7675'})),
-     h('div',{class:'small'},'Missed '+w.miss+(w.att>=w.miss?' of '+w.att:'')+' questions'),
-     h('div',{class:'tip'},'\uD83D\uDCA1 '+TIPS[w.kind]));}),
-    btn('\uD83D\uDCAA Practice these now','alt',function(){startQuiz('practice');})]);}
+  :[h('p',{class:'small'},'These are the skills that need the most love right now (from your quizzes and your practice):'),
+    wa.map(function(w){var c=Topics.catalog[w.kind];return h('div',{class:'weak'},h('div',{class:'l1'},h('span',null,(Topics.registry[w.topic].emoji)+' '+kl(w.kind)),h('span',{class:'pct',style:'color:#d63031'},w.rate?w.rate+'% missed lately':'time to review')),
+     h('div',{class:'progress'},h('i',{style:'width:'+Math.max(6,w.rate)+'%;background:#ff7675'})),
+     w.due?h('div',{class:'small'},'\uD83D\uDD01 Coming back for review'):null,
+     h('div',{class:'tip'},'\uD83D\uDCA1 '+c.tip));}),
+    btn('\uD83D\uDCAA Practice these now','alt',function(){startPracticeSession(wa[0].topic,wa[0].kind);},'practicenow')]);}
+/* encouraging practice stats, kept apart from the official daily scores */
+function practiceCard(){
+ var td=today(),tot=0,cor=0,rows=Topics.order.map(function(t){return Engine.topicSummary(store,t,td);});
+ rows.forEach(function(r){tot+=r.pa;cor+=r.pc;});
+ return h('div',{class:'card',id:'pstats'},h('h2',null,'\uD83D\uDCAA Practice stats'),
+  h('p',{class:'small'},'Extra practice you chose to do. These don\u2019t change your daily score!'),
+  tot?h('p',{class:'msg',id:'ptotal'},'You\u2019ve practiced '+tot+' '+(tot===1?'question':'questions')+' and got '+Math.round(100*cor/tot)+'% right. Keep going!'):h('p',null,'No practice yet. Try a topic and watch your level climb! \uD83D\uDE80'),
+  rows.map(function(r){var acc=r.pa?Math.round(100*r.pc/r.pa)+'% right':'';
+   return h('div',{class:'ptopic',id:'ps-'+r.topic},h('div',{class:'l1'},h('span',null,r.emoji+' '+r.short),h('span',{class:'pct',style:'color:#6c5ce7'},'Level '+r.work)),
+    h('div',{class:'small'},r.pa?(r.pa+' practiced \u00B7 '+acc+' \u00B7 best level '+r.pb):'Not practiced yet'),
+    h('div',{class:'badges'},r.skills.map(function(x){return h('span',{class:'sb '+x.badge.id,title:x.badge.label},x.badge.icon+' '+x.label);})));}),
+  btn('\uD83D\uDCAA Practice a topic','alt',renderPracticeHome,'pstatsgo'));}
 function renderHistory(){
  Q=null;var hs=store.history.slice().reverse(),all=store.history,n=all.length;
  var best=0;all.forEach(function(r){if(pct(r)>best)best=pct(r);});
@@ -678,7 +1300,7 @@ function renderHistory(){
      h('p',{class:'small legend'},'Bars = each quiz score. Black line = your running average.'),
      h('div',{class:'msg'},trendMsg())]
     :h('p',null,'No quizzes yet. Finish your first daily quiz and it will show up here!')),
-  weakCard(),
+  weakCard(),practiceCard(),
   h('div',{class:'card'},h('h2',null,'\uD83D\uDCCB All my quizzes'),n?h('p',{class:'small'},'Tap a quiz to look at every question again.'):null,
    hs.map(function(r){var p=pct(r);
     return h('button',{class:'hrow',type:'button',onclick:function(){renderPast(r.date);}},
@@ -694,7 +1316,7 @@ function renderPast(date){
   h('div',{class:'card pop'},h('p',{style:'text-align:center;font-weight:800;margin:0'},prettyDate(r.date)),
    h('div',{class:'big'},r.score+' / '+r.total),h('div',{style:'text-align:center;font-size:30px;font-weight:900;color:'+pctText(p)},p+'%'),
    h('p',{style:'text-align:center'},lvName(r.startLevel)+(r.best?'  \u2022  \uD83D\uDD25 Best streak: '+r.best:'')),
-   Object.keys(r.missed||{}).length?h('p',{class:'small',style:'text-align:center'},'Practice more: '+Object.keys(r.missed).map(function(k){return G.KIND_LABELS[k]||k;}).join(', ')+'.'):null),
+   Object.keys(r.missed||{}).length?h('p',{class:'small',style:'text-align:center'},'Practice more: '+Object.keys(r.missed).map(kl).join(', ')+'.'):null),
   h('div',{class:'card'},h('h2',null,'\uD83D\uDCCB The questions'),
    qs?[h('p',{class:'small'},'Tap a question to see how it works. Orange ones are the ones to learn from!'),reviewList(rec)]
       :h('p',null,'The question details for this day weren\u2019t saved, but the score is: '+r.score+' out of '+r.total+' ('+p+'%).'),
@@ -766,7 +1388,7 @@ function resync(rerender){
  return api({action:'load',token:token}).then(function(r){
   if(r.s===401){token=null;try{sessionStorage.removeItem(SS);}catch(e){}renderPin(kid,'Please type your PIN again.');return;}
   if(r.s===200){
-   if(!pending.length){var s=normalize(r.j.state);store=s||blank();save();setSync('saved');}
+   if(!pending.length){var s=adopt(normalize(r.j.state));store=s||blank();save();setSync('saved');}
    if(!store.history.length&&legacyData()&&lsGet('kyleMathQuiz.skip.'+kid)!=='1'){renderImportPrompt();return;}
    render();return;}
   /* offline or server trouble: use the cached copy */
@@ -788,7 +1410,7 @@ function doImport(lg){
  var recs=lg.history.map(function(r){var c={};for(var k in r)c[k]=r[k];return c;});
  var b=document.getElementById('importyes');if(b)b.textContent='Bringing it in\u2026';
  api({action:'save',token:token,importHistory:recs,importResults:results,level:lg.level}).then(function(r){
-  if(r.s===200){lsDel(LEGACY);api({action:'load',token:token}).then(function(x){if(x.s===200){store=normalize(x.j.state)||blank();save();}render();});return;}
+  if(r.s===200){lsDel(LEGACY);api({action:'load',token:token}).then(function(x){if(x.s===200){store=adopt(normalize(x.j.state))||blank();save();}render();});return;}
   if(r.s===409){lsSet('kyleMathQuiz.skip.'+kid,'1');render();return;}
   renderImportPrompt(r.net?'We can\u2019t reach the internet. Try again in a moment.':'Sorry, we couldn\u2019t bring that in. You can start fresh and your old data stays on this device.');});}
 /* ---------- home ---------- */
@@ -800,15 +1422,15 @@ function render(){
  if(ip&&ip.date===today()&&ip.answers&&ip.answers.length>0){
   show([h('h1',null,'Daily Math Quiz'),h('div',{class:'card pop'},h('h2',null,'Welcome back, '+kid+'! \uD83D\uDC4B'),h('p',null,'You\u2019re on question '+(ip.answers.length+1)+' of '+TOTAL+'.'),
    btn('Keep going \u25B6','go',resumeDaily,'resume'),histBtn()),logoutBtn(),parentCorner()]);return;}
- var first=isFirst(),f=focusText(missedFocus()),ds=dayStreak();
+ var first=isFirst(),f=focusSkills(2),ds=dayStreak();
  show([h('h1',null,'\uD83E\uDDE0 Daily Math Quiz'),h('div',{class:'sub',id:'whoami'},'Hi '+kid+'! \uD83D\uDC4B'),
   h('div',{class:'card pop'},
    h('div',{class:'row'},h('span',{class:'badge'},first?'Level 1 to start':lvName(store.level)),ds?h('span',{class:'badge'},'\uD83D\uDD25 '+ds+' day streak'):null),
    h('h2',null,first?'Hi, math star! \uD83D\uDC4B':'Ready for today\u2019s 10?'),
-   h('p',null,first?'Each question gives you a number for a letter. Is the equation true or false when you use that number? We start easy and the questions get harder as you do well!':'10 new questions are waiting. They start a little easier and get harder as you get them right.'),
+   h('p',null,first?'Each question gives you a number for a letter. Is the equation true or false when you use that number? We start easy and the questions get harder as you do well!':'10 new questions are waiting: mostly algebra plus a few from other topics. They start a little easier and get harder as you get them right.'),
    (!first&&f.length)?h('p',{class:'small'},'\uD83C\uDFAF Extra practice today on: '+f.join(', ')):null,
    h('div',{class:'tip'},'Example: If M = 49, is M \u00F7 7 = 7 true? Plug it in: 49 \u00F7 7 = 7. Yes, TRUE!'),
-   btn('Start today\u2019s quiz \u25B6','go',renderReminder,'start'),store.history.length?histBtn():null),
+   btn('Start today\u2019s quiz \u25B6','go',renderReminder,'start'),btn('\uD83D\uDCAA Practice a topic','alt',renderPracticeHome,'practicebtn'),store.history.length?histBtn():null),
   logoutBtn(),parentCorner()]);}
 document.addEventListener('visibilitychange',function(){if(!document.hidden&&kid&&!Q&&token){flush().then(function(){if(!pending.length&&!Q)resync(false);});}});
 /* ---------- boot: resume this tab's session, otherwise ask who is playing ---------- */
@@ -816,7 +1438,7 @@ document.addEventListener('visibilitychange',function(){if(!document.hidden&&kid
  var s=null;try{s=JSON.parse(sessionStorage.getItem(SS)||'null');}catch(e){}
  if(s&&KIDS.indexOf(s.kid)>=0&&typeof s.token==='string'){enterSession(s.kid,s.token);return;}
  renderPicker();})();
-window.__quiz={store:function(){return store;},kid:function(){return kid;},render:render,history:renderHistory,past:renderPast};
+window.__quiz={store:function(){return store;},kid:function(){return kid;},render:render,history:renderHistory,past:renderPast,practice:renderPracticeHome,q:function(){return Q&&Q.qs[Q.idx];},Q:function(){return Q;},pending:function(){return pending;}};
 })();
 </script>
 </body>
