@@ -132,7 +132,7 @@ function renderMain(){
   h('p',{class:'small'},'Only for grown-ups. Everything here is sent by the server after you sign in; the kids\u2019 app has none of it.'),
   tabs];
  if(!kd||!kd.exists){nodes.push(h('div',{class:'card'},h('p',null,curKid+' has not created a PIN yet.')));}
- else{nodes.push(summaryCard(kd),weakCard(kd),gradesCard(kd),topicsCard(kd),psychCard(kd),historyCard(kd),practiceCard(kd),biweeklyCard(kd),levelCard(kd));}
+ else{nodes.push(summaryCard(kd),weakCard(kd),hintsCard(kd),gradesCard(kd),topicsCard(kd),psychCard(kd),historyCard(kd),practiceCard(kd),biweeklyCard(kd),levelCard(kd));}
  nodes.push(explainCard(),pinCard());
  show(nodes);}
 
@@ -148,6 +148,17 @@ function weakCard(kd){
  return h('div',{class:'card',id:'weak'},h('h2',null,'Skills to keep practicing'),
   items.length?h('ul',null,items.map(function(w){return h('li',null,skillLabel(w.kind)+' \u2013 '+Math.round(Number(w.recent_miss_pct))+'% of the last answers missed ('+w.attempts+(Number(w.attempts)===1?' answer':' answers')+' in all)');})):h('p',{class:'small'},'Nothing stands out yet. A skill shows up here when it was missed in about a third or more of its last 10 answers.'),
   h('p',{class:'small'},'The daily mix leans on these automatically.'));}
+
+function hintsCard(kd){
+ var tot=0,hin=0,hr=0;(kd.dashboard||[]).forEach(function(d){tot+=num(d.attempts)||0;hin+=num(d.hinted_attempts)||0;hr+=num(d.hinted_correct)||0;});
+ var tr=(kd.dashboard||[]).filter(function(d){return (num(d.hinted_attempts)||0)>0;}).map(function(d){return h('tr',null,h('td',null,d.topic_label),h('td',null,String(num(d.hinted_attempts))),h('td',null,String(num(d.attempts)||0)),h('td',null,String(num(d.hinted_correct)||0)));});
+ var sr=(kd.skills||[]).filter(function(x){return (num(x.hinted_attempts)||0)>0;}).sort(function(a,b){return (num(b.hinted_attempts)||0)-(num(a.hinted_attempts)||0);}).slice(0,10).map(function(x){
+  return h('tr',null,h('td',null,x.skill_label),h('td',null,String(num(x.hinted_attempts))),h('td',null,String(num(x.attempts)||0)),h('td',null,String(num(x.hinted_correct)||0)),h('td',null,x.mastered?'mastered':'still building'));});
+ return h('div',{class:'card',id:'hints'},h('h2',null,'\uD83D\uDCA1 Used hints to learn'),
+  hin?h('p',{id:'hintsum'},kd.name+' used hints to learn on '+hin+' of '+tot+' answers'+(tot?' ('+Math.round(100*hin/tot)+'%)':'')+'; '+hr+' of them ended up right. That is a good learning habit, not a problem.'):h('p',{class:'small',id:'hintsum'},'No hints used yet. Every question has a \uD83D\uDCA1 Hint button the kids can tap whenever something feels tricky.'),
+  tr.length?h('div',{class:'tw'},h('table',{id:'hinttopics'},h('tr',null,h('th',null,'Topic'),h('th',null,'Hints'),h('th',null,'Answers'),h('th',null,'Hinted & right')),tr)):null,
+  sr.length?h('div',{class:'tw'},h('table',{id:'hintskills'},h('tr',null,h('th',null,'Skill'),h('th',null,'Hints'),h('th',null,'Of'),h('th',null,'Right'),h('th',null,'Status')),sr)):null,
+  h('p',{class:'small',id:'hintrule'},'Skills are listed most hints first. "Hints" = answers where a hint was used, "Of" = all answers, "Right" = answers that ended right with a hint. How hints count: a hint never changes the daily score (a right answer is right). It does change what the app learns: a skill only counts as mastered after right answers WITHOUT a hint, and a skill that was only right with hints comes back for review sooner. Hints are in 2 steps: a strategy nudge, then a more specific step. They never give away the answer.'));}
 
 function gradesCard(kd){
  var rows=[];
@@ -185,7 +196,7 @@ function historyCard(kd){
   h('p',{class:'small'},'Each day\u2019s score is final and saved to the cloud under '+kd.name+'\u2019s name.'));}
 
 function practiceCard(kd){
- var rows=(kd.practice||[]).map(function(p){return h('tr',null,h('td',null,p.day),h('td',null,p.topic),h('td',null,p.correct+'/'+p.questions),h('td',null,pctTxt(p.accuracy_pct)),h('td',null,String(p.start_level)+(p.top_level_cleared?' \u2192 cleared '+p.top_level_cleared:'')),
+ var rows=(kd.practice||[]).map(function(p){return h('tr',null,h('td',null,p.day),h('td',null,p.topic),h('td',null,p.correct+'/'+p.questions+(num(p.hinted_questions)>0?' \u00B7 \uD83D\uDCA1'+num(p.hinted_questions):'')),h('td',null,pctTxt(p.accuracy_pct)),h('td',null,String(p.start_level)+(p.top_level_cleared?' \u2192 cleared '+p.top_level_cleared:'')),
   h('td',null,h('button',{type:'button',class:'sm','data-session':p.session_id,onclick:function(){openPractice(kd.name,p.session_id);}},'Details')));});
  return h('div',{class:'card',id:'practice'},h('h2',null,'Practice sessions'),
   rows.length?h('div',{class:'tw'},h('table',{id:'practicetable'},h('tr',null,h('th',null,'Day'),h('th',null,'Topic'),h('th',null,'Right'),h('th',null,'%'),h('th',null,'Levels'),h('th',null,'')),rows)):h('p',{class:'small'},'No practice yet.'),
@@ -242,13 +253,13 @@ function openReview(kid,date){
   if(r.s!==200){show([backBar(),h('div',{class:'card'},h('p',{class:'msg'},r.net?'Cannot reach the server.':'No saved review for that day.'))]);return;}
   var j=r.j,qs=j.questions||[];
   show([backBar(),h('div',{class:'card',id:'review'},h('h2',null,kid+' \u2013 '+j.date),h('p',null,'Start level '+j.level+' \u2192 '+(j.level_after||j.level)+'. Score '+j.score+'/'+j.total+' ('+pctTxt(j.percent)+').'),
-   qs.map(function(q){return h('div',{class:'q'},h('div',null,h('b',null,'#'+q.n+' '),(q.kind_label||skillLabel(q.kind))+' \u00B7 level '+q.level+' \u00B7 ',h('span',{class:q.correct?'yes':'no'},q.correct?'right':'missed')),
+   qs.map(function(q){return h('div',{class:'q'},h('div',null,h('b',null,'#'+q.n+' '),(q.kind_label||skillLabel(q.kind))+' \u00B7 level '+q.level+' \u00B7 ',h('span',{class:q.correct?'yes':'no'},q.correct?'right':'missed'),(num(q.hints)>0?h('span',{class:'small hintmark'},' \u00B7 \uD83D\uDCA1 used '+num(q.hints)+(num(q.hints)===1?' hint':' hints')):null)),
     h('div',{class:'t'},q.text||''),h('div',{class:'small'},'Answered '+(q.answer?'True':'False')+'; the statement was '+(q.truth?'True':'False')+'.'));}))]);});}
 function openPractice(kid,sess){
  show([backBar(),h('div',{class:'card'},h('p',null,'Loading\u2026'))]);
  authed({action:'practice_session',kid:kid,session:sess}).then(function(r){if(!r)return;
   if(r.s!==200){show([backBar(),h('div',{class:'card'},h('p',{class:'msg'},r.net?'Cannot reach the server.':'Not found.'))]);return;}
-  show([backBar(),h('div',{class:'card',id:'review'},h('h2',null,kid+' \u2013 practice'),r.j.questions.map(function(q){return h('div',{class:'q'},h('div',null,h('b',null,'#'+q.seq+' '),skillLabel(q.kind)+' \u00B7 level '+q.level+' \u00B7 ',h('span',{class:q.correct?'yes':'no'},q.correct?'right':'missed')),
+  show([backBar(),h('div',{class:'card',id:'review'},h('h2',null,kid+' \u2013 practice'),r.j.questions.map(function(q){return h('div',{class:'q'},h('div',null,h('b',null,'#'+q.seq+' '),skillLabel(q.kind)+' \u00B7 level '+q.level+' \u00B7 ',h('span',{class:q.correct?'yes':'no'},q.correct?'right':'missed'),(num(q.hints_used)>0?h('span',{class:'small hintmark'},' \u00B7 \uD83D\uDCA1 used '+num(q.hints_used)+(num(q.hints_used)===1?' hint':' hints')):null)),
    h('div',{class:'t'},q.question_text||''),h('div',{class:'small'},'Answered '+(q.answered_true?'True':'False')+'; the statement was '+(q.truth?'True':'False')+'.'));}))]);});}
 
 /* ---------- start ---------- */

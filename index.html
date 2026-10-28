@@ -54,6 +54,12 @@ table{width:100%;border-collapse:collapse;font-size:15px}
 th,td{padding:6px 5px;border-bottom:1px solid #eee;text-align:left;vertical-align:top}
 select{font:inherit;font-size:18px;padding:10px;border-radius:12px;border:2px solid #a29bfe}
 .small{font-size:15px;color:#555}
+.hintbar{text-align:center;margin:6px 0}
+.btn.hint{display:inline-block;width:auto;max-width:100%;min-height:52px;padding:10px 18px;font-size:19px;background:#fff;color:#6c5ce7;border:3px solid #6c5ce7;border-radius:18px;box-shadow:none}
+.btn.hint:disabled{opacity:.55;cursor:default}
+.hintbox{background:#fffbe6;border-left:8px solid #fdcb6e;border-radius:14px;padding:10px 12px;font-size:18px;font-weight:600;margin:8px 0;text-align:left;overflow-wrap:anywhere}
+.hintbox b{display:block;font-size:14px;color:#8a6d00;margin-bottom:2px}
+.hintnote{font-size:15px;color:#5b4fcf;margin:4px 0;text-align:center;font-weight:700}
 .hrow{display:block;width:100%;text-align:left;font:inherit;background:#fff;border:3px solid #e8e6ff;border-radius:18px;padding:12px 14px;margin:10px 0;cursor:pointer;color:#2d2a4a;box-shadow:0 4px 0 rgba(108,92,231,.18)}
 .hrow:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(108,92,231,.18)}
 .hrow .l1{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-weight:900;font-size:19px}
@@ -1418,10 +1424,263 @@ return out;
 })();
 if(typeof module!=='undefined')module.exports=Lang;
 
+/* hints.js: graded hints for every skill (see ROADMAP.md, "Hints").
+   hint(q, stage): stage 1 = a nudge about the STRATEGY, stage 2 = a more specific step that still never says True/False or which choice is right.
+   Rules every hint follows (and tests/hints.test.js enforces):
+   - encouraging, plain words for grades 4-5;
+   - it never shows a computed result, the right choice, or the words true/false as a verdict; numbers come from the question itself or are tiny helper numbers (0-12, 100, 1000);
+   - it works from the question's visible text (and `spec` when present), so a resumed or old question still gets a hint (generic fallback by skill kind). */
+var Hints=(function(){
+'use strict';
+var LG=(typeof Lang!=='undefined')?Lang:require('./lang.js');
+var TIMES='\u00d7',DIV='\u00f7',MINUS='\u2212',LQ='\u201C',RQ='\u201D';
+function qt(s){return LQ+s+RQ;}
+function num(s){return +String(s).replace(/,/g,'');}
+function digits(n){return String(n).length;}
+function hash(s){var h=7;for(var i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h;}
+var CLOSE1=['You can do this!','Take your time.','Great thinking so far!','Go one step at a time.'];
+var CLOSE2=['Give it your best try!','You are close to a plan!','Go for it!','Nice work asking for a hint!'];
+function close(q,stage,text){var L=stage===1?CLOSE1:CLOSE2;return text+' '+L[hash((q.text||q.stmt||'')+stage)%L.length];}
+function qtext(q){return (q.prompt||'')+' '+(q.stmt||'');}
+function isChoice(q){return !!q.choices||q.mode==='choice2';}
+function quoted(s){var out=[],re=/\u201C([^\u201D]*)\u201D/g,m;while((m=re.exec(s||'')))out.push(m[1]);return out;}
+
+/* ---------- algebra (plug the number in) ---------- */
+var ALG1={
+ addsub:'Plug it in! Put the number in for the letter, then do the adding or subtracting on each side. Then compare the two sides.',
+ muldiv:'Plug it in! Put the number in for the letter, then do the multiplying or dividing on each side. Then compare the two sides.',
+ twostep:'Plug it in! Put the number in for the letter and do the math. Remember: multiply or divide BEFORE you add or subtract. Then compare both sides.',
+ parens:'Plug it in! Put the number in for the letter and work out what is inside the parentheses first. Then compare both sides.',
+ both:'The mystery letter is on BOTH sides, so put the number in everywhere it appears. Work out the left side, then the right side, then compare them.',
+ order:'Plug it in, then use the order of operations: parentheses first, then multiply and divide, then add and subtract. Compare both sides at the end.',
+ multi:'Plug it in, then go one step at a time: parentheses first, then multiply and divide, then add and subtract. Writing each step down helps. Compare both sides at the end.'};
+function algStep(q){var e=q.eq||'',md=e.indexOf(TIMES)>=0||e.indexOf(DIV)>=0,as=/ [+\u2212] /.test(e);
+ if(q.kind==='both')return 'Work out the left side completely, then the right side completely, one operation at a time.';
+ if(e.indexOf('(')>=0)return 'Start with the parentheses: do the math inside them first, then keep going one operation at a time.';
+ if(md&&as)return 'Do the '+TIMES+' and '+DIV+' parts first, then the + and '+MINUS+' parts, one operation at a time.';
+ if(md)return 'Do the '+(e.indexOf(TIMES)>=0&&e.indexOf(DIV)>=0?TIMES+' and '+DIV+' from left to right':e.indexOf(TIMES)>=0?TIMES:DIV)+', one operation at a time.';
+ return 'Do the + and '+MINUS+' from left to right, one operation at a time.';}
+function algebra(q,stage){
+ if(stage===1)return ALG1[q.kind]||ALG1.twostep;
+ var vn=q.vn,p=q.p,eq=q.eq;
+ if(vn&&p!==undefined&&eq&&eq.indexOf(' = ')>0){
+  return 'Swap '+vn+' for '+p+':   '+eq.split(vn).join(String(p))+'.  '+algStep(q)+' Are the two sides equal?';}
+ return 'Replace the letter with the number in BOTH sides of the equation. '+algStep(q)+' Are the two sides equal?';}
+
+/* ---------- number sense ---------- */
+var PL=['ones','tens','hundreds','thousands','ten thousands','hundred thousands','millions'];
+var RN=['one','ten','hundred','thousand','ten thousand','hundred thousand','million'];
+function nsPlace(q,stage){var s=q.stmt||'',x;
+ if((x=s.match(/^In ([\d,]+), the digit (\d) is in the (.+) place\.$/))){
+  return stage===1?'Place names start on the RIGHT: ones, tens, hundreds, thousands. Find the digit '+x[2]+' in the number and see where it sits.'
+   :'In '+x[1]+', the last digit is in the ones place. Count how many digits are to the right of the '+x[2]+': none means ones, one means tens, two means hundreds, three means thousands.';}
+ if((x=s.match(/^In ([\d,]+), the digit (\d) is worth ([\d,]+)\.$/))){
+  return stage===1?'A digit is worth the digit times its place (a 3 in the tens place is 3 '+TIMES+' 10). First find which place the '+x[2]+' sits in.'
+   :'Count the digits to the right of the '+x[2]+' in '+x[1]+'. That tells you the place: none is ones, one is tens, two is hundreds. Then multiply '+x[2]+' by 1, 10, 100... for that place.';}
+ if((x=s.match(/^The (\d) in ([\d,]+) is worth ([\d,]+) times as much as the (\d) in ([\d,]+)\.$/))){
+  return stage===1?'Each place you move to the LEFT makes a digit worth 10 times as much. Count how many places apart the two '+x[1]+'s are.'
+   :'Find the place of each '+x[1]+' by counting the digits to its right. The gap between the two places tells you how many 10s to multiply: 1 place apart is 10 times, 2 places is 100 times, 3 places is 1,000 times.';}
+ return stage===1?'Count the places from the right: ones, tens, hundreds, thousands. A digit is worth its number times its place.'
+  :'Write the place name under each digit, starting with ones on the far right. Then check the statement against what you wrote.';}
+function nsRound(q,stage){var x=(q.stmt||'').match(/^([\d,]+) rounded to the nearest (.+) is ([\d,]+)\.$/);
+ if(stage===1)return 'Find the place you are rounding to. Then peek at the digit just to its RIGHT: 5 or more rounds up, 4 or less stays.';
+ if(x){var n=num(x[1]),pe=RN.indexOf(x[2]);
+  if(pe>=1){var d=Math.floor(n/Math.pow(10,pe-1))%10;
+   return 'You are rounding '+x[1]+' to the nearest '+x[2]+'. The digit just to the right, in the '+PL[pe-1]+' place, is '+d+'. Is that 5 or more, or 4 or less? Then decide what happens to the '+PL[pe]+' digit.';}}
+ return 'Underline the digit in the place you are rounding to, then look at its neighbor on the right. Decide: up or stay? Everything to the right becomes zeros.';}
+function nsCompare(q,stage){var s=q.stmt||'',x;
+ if((x=s.match(/^([\d,]+) ([<>]) ([\d,]+)$/))){
+  return stage===1?'Line the numbers up by place. More digits means a bigger number. With the same number of digits, compare from the LEFT; the first digit that is different decides.'
+   :x[1]+' has '+digits(num(x[1]))+' digits and '+x[3]+' has '+digits(num(x[3]))+' digits. If those match, start at the far left and find the first place where the two numbers are different.';}
+ if(s.indexOf(' + ')>0){
+  return stage===1?'Expanded form means adding up what each digit is worth. Add the parts, and remember a zero holds a place.'
+   :'Add the parts one at a time, starting with the biggest two, then add the next part. Then check each digit of the total in the statement against the parts.';}
+ return stage===1?'Compare place by place from the left, or add up the parts of the expanded form.':'Find the first place where the numbers differ, or add the parts one at a time.';}
+
+/* ---------- facts ---------- */
+function fxMult(q,stage){var x=(q.stmt||'').match(/^(\d+) \u00d7 (\d+) = ([\d,]+)$/);
+ if(stage===1)return 'Use a fact you already know to build this one: count by the bigger number, or split one factor into friendly pieces like 5 or 10.';
+ if(x){var a=+x[1],b=+x[2];
+  if(a===9||b===9){var o=a===9?b:a;return '9s are tricky but there is a shortcut: 9 '+TIMES+' '+o+' is the same as (10 '+TIMES+' '+o+') '+MINUS+' '+o+'. Work that out, then compare.';}
+  if(a===5||b===5||a===10||b===10)return 'Count by '+(a===5||b===5?'5s':'10s')+', like skip counting on a number line. How many jumps do you need?';
+  if(a===4||b===4)return '4s are doubling twice: double the other number, then double again. Work it out, then compare.';
+  var big=Math.max(a,b),small=Math.min(a,b);
+  if(small>=6&&small<=8)return 'Split '+small+' into 5 + '+(small-5)+': '+big+' '+TIMES+' '+small+' = ('+big+' '+TIMES+' 5) + ('+big+' '+TIMES+' '+(small-5)+'). Work out each piece, add them, then compare.';
+  return 'Try splitting one number into easy pieces, work out each piece, and add them. For example, a '+TIMES+' 6 is a '+TIMES+' 5 plus one more a.';}
+ return 'Break one number into friendly pieces (like 5 and something small), work out each piece, then add them up.';}
+function fxDiv(q,stage){var x=(q.stmt||'').match(/^(\d+) \u00f7 (\d+) = ([\d,]+)$/);
+ if(stage===1)return 'Turn the division into a missing-number multiplication: how many groups of the small number fit into the big number?';
+ if(x)return 'Ask yourself: '+x[2]+' '+TIMES+' what number = '+x[1]+'? Skip count by '+x[2]+'s (1 group, 2 groups, 3 groups...) until you reach '+x[1]+'. Then compare your number with the statement.';
+ return 'Ask: small number '+TIMES+' what = big number? Skip count by the small number until you reach the big number.';}
+function fxWord(q,stage){var p=q.prompt||'',s=q.stmt||'',x;
+ if(stage===1)return 'Read slowly and say the story in your own words. Is it equal groups (multiply), sharing equally (divide), or taking some away (subtract)? Do one step at a time.';
+ if(/^\w+ has \d+ \w+ with \d+ \w+ in each\.$/.test(p))return 'This is equal groups: the number of groups '+TIMES+' how many are in each group gives the total. Work it out, then compare with the statement.';
+ if(/shared equally among/.test(p))return 'Sharing equally means divide: the total '+DIV+' the number of friends. Think: friends '+TIMES+' what = total? Then compare with the statement.';
+ if(/^One book costs/.test(p))return 'If one book costs the same each time, more books cost more: the price of one '+TIMES+' how many books. Work it out, then compare.';
+ if(/times as many/.test(p))return '\u201C'+'times as many'+RQ+' tells you to multiply: the first number '+TIMES+' the number of times. Work it out, then compare.';
+ if(/rows of \d+ chairs/.test(p))return 'Two steps: first find ALL the chairs (rows '+TIMES+' chairs in each row), then take away the ones that are taken. Compare your result with the statement.';
+ if(/packs \d+ boxes/.test(p))return 'Two steps: first find ALL the cookies (boxes '+TIMES+' cookies in each), then take away the ones that were eaten. Compare your result with the statement.';
+ if(/ride in vans/.test(p))return 'Divide the kids by the seats in one van. If there are some kids left over, they still need a van, so think about whether you need one more. Then compare with the statement.';
+ return 'Pick out the numbers that matter, decide which operation the story is asking for, and do just the first step. Then compare with the statement.';}
+
+/* ---------- fractions ---------- */
+function frEquiv(q,stage){var x=(q.stmt||'').match(/^(\d+)\/(\d+) = (\d+)\/(\d+)$/);
+ if(stage===1)return 'Equivalent fractions are the same size cut into different pieces. Whatever you multiply (or divide) the top by, you must do to the bottom too.';
+ if(x){var d1=+x[2],d2=+x[4];
+  if(d2%d1===0)return 'Compare the bottoms: what number times '+d1+' makes '+d2+'? Do that SAME multiplication to the top '+x[1]+'. Does it make the other top?';
+  if(d1%d2===0)return 'Compare the bottoms: what do you divide '+d1+' by to get '+d2+'? Do that SAME division to the top '+x[1]+'. Does it make the other top?';
+  return 'The bottoms are not simple multiples, so try simplifying: find a number that divides the top AND bottom of each fraction, and see if they end up the same.';}
+ return 'Find what you multiply or divide the bottoms by, then do the same to the tops and see if they match.';}
+function frCompare(q,stage){var x=(q.stmt||'').match(/^(\d+)\/(\d+) ([<>]) (\d+)\/(\d+)$/);
+ if(stage===1)return 'Look at the bottoms and tops first. Same bottoms: compare the tops. Same tops: a BIGGER bottom means smaller pieces. Different? Make the bottoms match.';
+ if(x){var n1=+x[1],d1=+x[2],n2=+x[4],d2=+x[5];
+  if(d1===d2)return 'The bottoms are the same ('+d1+'), so the pieces are the same size. Just compare the tops: '+n1+' and '+n2+'.';
+  if(n1===n2)return 'The tops are the same ('+n1+'), so the difference is the size of the pieces. Remember: the bigger the bottom number, the smaller each piece. Compare '+d1+' and '+d2+'.';
+  return 'The bottoms are different ('+d1+' and '+d2+'), so find a number that both bottoms go into (a common denominator). Rewrite both fractions with it, then compare the tops.';}
+ return 'Make the bottoms the same (a common denominator), then compare the tops.';}
+function frOf(q,stage){var x=(q.stmt||'').match(/^(\d+)\/(\d+) of ([\d,]+) is ([\d,]+)\.$/);
+ if(stage===1)return 'To find a fraction of a number: divide by the bottom number to get ONE part, then multiply by the top number.';
+ if(x)return 'Step 1: '+x[3]+' '+DIV+' '+x[2]+' gives the size of one part. Step 2: multiply that by '+x[1]+(x[1]==='1'?' (here the top is 1, so one part is all you need)':'')+'. Then compare with the statement.';
+ return 'Step 1: divide the whole number by the bottom of the fraction. Step 2: multiply by the top. Then compare.';}
+function frAdd(q,stage){var s=q.stmt||'',x;
+ if(stage===1)return 'When the bottoms (denominators) are the same, add or subtract only the TOPS. The bottom stays the same. If a top ends up bigger than the bottom, think about mixed numbers.';
+ if((x=s.match(/^1 \u2212 (\d+)\/(\d+) = /)))return 'Write the 1 as a fraction with the same bottom: '+x[2]+'/'+x[2]+'. Then subtract the tops and keep the bottom.';
+ if((x=s.match(/^(\d+)\/(\d+) ([+\u2212]) (\d+)\/(\d+) = /)))return 'The bottoms are both '+x[2]+', so keep '+x[2]+' on the bottom. Do just the tops: '+x[1]+' '+x[3]+' '+x[4]+'. Then compare with the statement'+(x[3]==='+'?' (if the top comes out bigger than the bottom, it is more than one whole).':'.');
+ return 'Keep the bottom the same and add or subtract just the tops. Then compare with the statement.';}
+
+/* ---------- English ---------- */
+function firstQuote(q){var a=quoted(qtext(q));return a.length?a[0]:'';}
+function enVocab(q,stage){var m=q.spec&&q.spec.m,p=qtext(q),w=(q.spec&&(q.spec.w||q.spec.a))||firstQuote(q);
+ if(m==='ctx'||/in this sentence/.test(p)){
+  return stage===1?'Reread the whole sentence. The words around the tricky word are clues to what it means.'
+   :'Say the sentence again, but swap in each meaning for '+(w?qt(w):'the tricky word')+'. Which meaning still makes the sentence make sense?';}
+ if(m==='ant'||/opposite/i.test(p)){
+  return stage===1?'Antonyms are OPPOSITES, like hot and cold. Think about what the word means, then think of its reverse.'
+   :'Picture what '+(w?qt(w):'the word')+' means, then ask of each word: is it the reverse, or just something different?';}
+ return stage===1?'Synonyms are words with almost the same meaning. Think about what the word means and use it in a sentence.'
+  :'Think about what '+(w?qt(w):'the word')+' means. Then ask: if I swapped the other word into my sentence, would it mean about the same thing?';}
+function enPos(q,stage){var w=(q.spec&&q.spec.w)||firstQuote({prompt:'',stmt:q.stmt});
+ return stage===1?'Ask what the word DOES in the sentence: names a person, place or thing (noun), shows action (verb), describes a noun (adjective), or tells how, when or where (adverb).'
+  :'Find '+(w?qt(w):'the word')+' in the sentence and ask three questions: Is it naming something? Is it showing an action? Is it describing something or telling how? Match that job to a word type.';}
+function enVerbs(q,stage){var m=q.spec&&q.spec.m,t=(q.stmt||'');
+ var sent=(quoted(t)[0])||t;
+ if(m==='sva'||/subject/.test(q.prompt||'')){
+  var s=q.spec&&q.spec.s;
+  return stage===1?'Find the subject: who or what is the sentence about? Is it ONE thing or MORE than one?'
+   :(s?'The subject is '+qt(s)+'. Is that one person or thing, or more than one? One usually goes with a verb that ends in -s (walks, has, is); more than one goes with the plain verb (walk, have, are).'
+      :'Find the subject, then decide: one or more than one? One usually goes with a verb that ends in -s (walks, has, is); more than one goes with the plain verb (walk, have, are).');}
+ var cue=(sent.indexOf(',')>0&&sent.indexOf(',')<=26)?sent.slice(0,sent.indexOf(',')+1):'';
+ return stage===1?'Look for a time clue (yesterday, last night, right now, tomorrow, already) and match the verb to the time.'
+  :(cue?'Look at the clue '+qt(cue)+' Did it already happen, is it happening now, or has it not happened yet? Pick the verb form that matches that time.'
+    :'Find the time clue in the sentence. Did it already happen, is it happening now, or has it not happened yet? Pick the verb form that matches that time.');}
+function sortedPair(a,b){return a.toLowerCase()<b.toLowerCase()?[a,b]:[b,a];}
+function enUsage(q,stage){
+ if(stage===1)return 'These words sound alike (or nearly alike) but mean different things. Read the sentence with each word and ask which one has the right MEANING, not just the right sound.';
+ var r=q.spec&&q.spec.r,x=q.spec&&q.spec.x,ch=q.choices;
+ var a=ch?ch[0].toLowerCase():r,b=ch?ch[1].toLowerCase():x;
+ if(a&&b){var ga=LG.glossOf(a),gb=LG.glossOf(b);
+  if(ga&&gb){var pr=sortedPair(a,b);var g={};g[a]=ga;g[b]=gb;
+   return 'Meanings to think about: '+qt(pr[0])+' is '+g[pr[0]]+'; '+qt(pr[1])+' is '+g[pr[1]]+'. Which meaning fits this sentence?';}}
+ return 'Say what the sentence is trying to tell you. Then try each of the two words and listen: which one says that?';}
+function enPunct(q,stage){
+ return stage===1?'Check it like an editor: capital letter at the start? Names, places, days and months capitalized? The right mark at the end? Commas in lists?'
+  :(isChoice(q)?'Put the two sentences side by side and find the exact spot where they are different. Then ask which one follows the capital letter and punctuation rules.'
+   :'Go through it one thing at a time: the first letter, any names or places, any commas, then the ending mark. Does each one follow the rules?');}
+function enSpell(q,stage){
+ if(stage===1)return 'Say the word slowly and look at every letter. Which spelling looks like words you have seen in books?';
+ var r=q.spec&&q.spec.r,x=q.spec&&q.spec.x;
+ if(r&&x&&r!==x){var i=0;while(i<r.length&&i<x.length&&r.charAt(i)===x.charAt(i))i++;
+  var j=0;while(j<r.length-i&&j<x.length-i&&r.charAt(r.length-1-j)===x.charAt(x.length-1-j))j++;
+  var from=i+1,to=Math.max(from,Math.max(r.length,x.length)-j);
+  return 'The two spellings are not the same around letter'+(to>from?'s '+from+' to '+to:' '+from)+'. Look closely at that part of the word, and try saying it one sound at a time.';}
+ return 'Say the word one sound at a time and check the middle letters, since vowels are the trickiest part. Cover it, picture it, and see if it looks right.';}
+var RTYPE={main:'The MAIN IDEA is what the whole passage is mostly about, so think about the title and what happens most.',detail:'A DETAIL is a fact the passage tells you directly, so go back and find the exact words.',
+ infer:'An INFERENCE is a smart guess from clues in the passage plus what you already know. Look for the clues.',purpose:'The author\u2019s PURPOSE is WHY it was written: to inform, to entertain, or to persuade.',vocab:'Use the words around the tricky word as clues to its meaning.'};
+function enRead(q,stage){var t=q.spec&&q.spec.type;
+ if(stage===1)return (RTYPE[t]||'Go back to the passage and look for the part that talks about this question.')+' Reread the passage before you decide.';
+ return isChoice(q)?'Pick one or two key words from the question and find them in the passage. Read the sentences around them. Then cross out any choice the passage does not support.'
+  :'Find the sentence in the passage that talks about the question. Does the passage really say what the answer says? Check the details one at a time.';}
+function enFigure(q,stage){var m=q.spec&&q.spec.m,FD=LG.FIG_DEF||{};
+ if(m==='idiom'||/idiom/.test(qtext(q))){
+  return stage===1?'An idiom is a saying that does NOT mean what its words say. Think about what people really mean when they say it.'
+   :'Do not picture the exact words. Think of a real-life time someone would say this. Which meaning fits that situation?';}
+ if(stage===1)return 'Look for clue words: \u201Clike\u201D or \u201Cas\u201D, one thing that IS another, a non-human thing acting human, a huge exaggeration, repeated starting sounds, or a sound word.';
+ var names=q.choices?q.choices.slice():[];
+ if(!names.length){var mm=(q.stmt||'').match(/^This is an? (\w+)\.$/);if(mm)names=[mm[1]];}
+ var defs=names.filter(function(n){return FD[n];}).sort();
+ if(defs.length)return 'Think about '+(defs.length>1?'these two:':'this one:')+' '+defs.map(function(n){return FD[n];}).join(' ')+' Does the sentence do that?';
+ return 'Read the sentence word by word. Do you see \u201Clike\u201D or \u201Cas\u201D, a sound word, or a non-human thing doing something human?';}
+function enRoots(q,stage){var m=q.spec&&q.spec.m,p=q.prompt||'',st=q.stmt||'',h=p.match(/^Hint: \u201C([^\u201D]+)\u201D means \u201C([^\u201D]+)\u201D\.$/);
+ if(m==='affix'){var pc=q.spec.p||firstQuote(q);
+  return stage===1?'Prefixes come at the START of a word and suffixes at the END. Think of words you know that use this part.'
+   :'Think of a word you know well that has '+qt(pc)+' in it. How does that part change the word\u2019s meaning?';}
+ if(m==='root'||/the root \u201C/.test(st)&&!/word/.test(st)){var rt=(q.spec&&q.spec.root)||firstQuote(q);
+  return stage===1?'Roots are the core of a word, and many words share them. Think of words you know that contain this root.'
+   :'Think of a word you know with '+qt(rt)+' in it. What does that word have to do with? The root\u2019s meaning is the common thread.';}
+ if(m==='rootword'){
+  return stage===1?'Look inside each word for a root you recognize and think about what it means.'
+   :(isChoice(q)?'The question gives a meaning. Think of Greek or Latin roots you know that carry that meaning, then look for one hiding inside each of the two words.'
+    :'Break the word into pieces. Do you know any piece? Does its meaning match what the statement says?');}
+ return stage===1?'Split the word into smaller parts (a beginning, a base or root, an ending) and think about what each part means.'
+  :(h?'The hint tells you what '+qt(h[1])+' means. Now put that meaning together with the rest of the word and say it as a short phrase.'
+   :'Find the part at the start or end that you know (like un-, re-, -less, -ful). Say what it means, then put it with the rest of the word.');}
+
+/* ---------- psychology: one pair of hints per skill, with a "goal" the idea should serve ---------- */
+var PS={
+ mindset:['Think about a growth mindset: mistakes, effort and the word \u201Cyet\u201D help brains grow.','keep learning going and treat mistakes as chances to grow'],
+ memory:['Memories get stronger with practice, sleep, and using what you learn in different ways.','help a memory stick by practicing, reviewing or using it'],
+ focus:['Focus gets easier when you remove distractions and break big jobs into small steps.','help the brain pay attention to one thing at a time'],
+ feelings:['All feelings are okay. What matters is what we DO with them, so think about calm-down tools.','help the feeling settle down and keep everyone safe and kind'],
+ empathy:['Empathy means imagining how someone else feels and what they need.','show care and understand how the other person feels'],
+ bias:['Our brains take shortcuts and can be tricked, so smart thinkers check before they decide.','check the facts instead of jumping to a conclusion'],
+ habits:['Habits grow from small steps, reminders, and repeating them.','make the habit easier to start and remember'],
+ team:['Good teammates listen, share the work, and stay kind, even when they disagree.','treat everyone with respect and help the team work together']};
+function psych(q,stage){var sk=(q.kind||'').replace(/^ps_/,''),d=PS[sk]||['Think about what helps your brain, your feelings and the people around you.','help you and the people around you'],fact=(q.spec&&q.spec.m==='fact');
+ if(stage===1)return fact?'Think about what you have learned about how brains and feelings really work. '+d[0]:d[0];
+ if(fact)return 'Ask yourself: is this something scientists and teachers have found, or a popular myth? Explain your thinking in your own words before you choose.';
+ return isChoice(q)?'Read both ideas and ask of each: does it '+d[1]+'? Think about how things would go afterward for everyone.'
+  :'Ask yourself: does this idea '+d[1]+'? Think about how things would go afterward for everyone.';}
+
+/* ---------- generic fallbacks ---------- */
+function generic(q,stage){
+ if(isChoice(q))return stage===1?'Read the question and both choices slowly. Think about what the question is really asking before you pick.'
+  :'Try each choice in the question or sentence. Which one fits better, and can you say why?';
+ return stage===1?'Read the statement slowly and think about what you already know. Try explaining it in your own words.'
+  :'Break the statement into small pieces and check each piece. Does every piece hold up?';}
+
+var BY={addsub:algebra,muldiv:algebra,twostep:algebra,parens:algebra,both:algebra,order:algebra,multi:algebra,
+ ns_place:nsPlace,ns_round:nsRound,ns_compare:nsCompare,fx_mult:fxMult,fx_div:fxDiv,fx_word:fxWord,fr_equiv:frEquiv,fr_compare:frCompare,fr_of:frOf,fr_add:frAdd,
+ en_vocab:enVocab,en_pos:enPos,en_verbs:enVerbs,en_usage:enUsage,en_punct:enPunct,en_spell:enSpell,en_read:enRead,en_figure:enFigure,en_roots:enRoots};
+['mindset','memory','focus','feelings','empathy','bias','habits','team'].forEach(function(k){BY['ps_'+k]=psych;});
+
+/* ---------- the safety net: a hint must never hand over the answer ---------- */
+function esc(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+function hasWord(text,w){if(!w)return false;return new RegExp('(^|[^A-Za-z0-9])'+esc(w)+'($|[^A-Za-z0-9])','i').test(text);}
+function leaks(q,text){
+ if(/\b(the answer is|correct answer|right answer|is (not )?(true|false)|it'?s (not )?(true|false)|this is (not )?(true|false))\b/i.test(text))return true;
+ var lower=text.toLowerCase(),t=/\btrue\b/.test(lower),f=/\bfalse\b/.test(lower);
+ if(!q.choices&&(q.truth?t&&!f:f&&!t))return true;
+ if(q.choices){var c=q.truth?q.choices[0]:q.choices[1],w=q.truth?q.choices[1]:q.choices[0];
+  if(c&&c!==w&&(c.length>=4?hasWord(text,c):text.indexOf(qt(c))>=0)&&!(w.length>=4?hasWord(text,w):text.indexOf(qt(w))>=0)&&c.toLowerCase().indexOf(w.toLowerCase())<0)return true;}
+ return false;}
+var STAGES=2;
+function hint(q,stage){
+ stage=stage>=2?2:1;
+ var fn=BY[q.kind]||generic,text;
+ try{text=fn(q,stage);}catch(e){text=null;}
+ if(!text||leaks(q,text)){try{text=generic(q,stage);}catch(e2){text='Take a breath, read the question again, and try one small step.';}}
+ var closed=close(q,stage,text);return leaks(q,closed)?text:closed;}
+return {hint:hint,forSkill:function(kind){return function(q,stage){return hint(q&&q.kind===kind?q:Object.assign({},q||{},{kind:kind}),stage);};},
+ leaks:leaks,generic:generic,STAGES:STAGES,kinds:Object.keys(BY),
+ MESSAGES:{button:'\uD83D\uDCA1 Hint',another:'\uD83D\uDCA1 Another hint',intro:'Asking for a hint is a smart learning move!',used:'You used hints to learn, and that is a great strategy.'}};
+})();
+if(typeof module!=='undefined')module.exports=Hints;
+
 var Topics=(function(){
 'use strict';
 var QG=(typeof QuizGen!=='undefined')?QuizGen:require('./gen.js');
 var LG=(typeof Lang!=='undefined')?Lang:require('./lang.js');
+var HN=(typeof Hints!=='undefined')?Hints:require('./hints.js');
 var TIMES='\u00d7',DIV='\u00f7',MINUS='\u2212';
 var rngFromSeed=QG.rngFromSeed;
 function ri(r,a,b){return a+Math.floor(r()*(b-a+1));}
@@ -1727,6 +1986,8 @@ var REG={
    {id:'fr_add',skill:'adding & subtracting fractions',label:'Adding & subtracting fractions',tip:'Same denominator? Add or subtract only the tops. The bottom stays the same.'}]}
 };
 REG.english=LG.registry.english;REG.psych=LG.registry.psych;
+/* every skill gets a hint(q, stage) function from hints.js (stage 1 = strategy nudge, stage 2 = more specific step) */
+Object.keys(REG).forEach(function(id){REG[id].skills.forEach(function(s){s.hint=HN.forSkill(s.id);});});
 var ORDER=['algebra','numsense','facts','fractions','english','psych'];
 var BUILDERS={ns_place:nsPlace,ns_round:nsRound,ns_compare:nsCompare,fx_mult:fxMult,fx_div:fxDiv,fx_word:fxWord,fr_equiv:frEquiv,fr_compare:frCompare,fr_of:frOf,fr_add:frAdd};
 for(var bk in LG.builders)BUILDERS[bk]=LG.builders[bk];
@@ -1775,19 +2036,20 @@ function answerText(q,val){if(val===undefined||val===null)return '';if(q.choices
 function correctText(q){return answerText(q,q.truth);}
 /* ---- storage of finished quizzes (compact, backwards compatible with the algebra-only format) ---- */
 function compact(q){
- if(q.sections&&!q.plug){return {l:q.level,k:q.kind,T:q.topic,t:q.truth?1:0,g:q.prompt||'',e:q.stmt,S:q.sections.map(function(s){return [s.t,s.h,s.l];}),i:q.tip,x:q.shortExpl,a:q.userAnswer===true?1:q.userAnswer===false?0:-1,M:q.choices?'c':undefined,C:q.choices||undefined,P:q.passage?[q.passage.t,q.passage.x]:undefined};}
- return QG.compactQ(q);}
+ if(q.sections&&!q.plug){return {l:q.level,k:q.kind,T:q.topic,t:q.truth?1:0,g:q.prompt||'',e:q.stmt,S:q.sections.map(function(s){return [s.t,s.h,s.l];}),i:q.tip,x:q.shortExpl,a:q.userAnswer===true?1:q.userAnswer===false?0:-1,M:q.choices?'c':undefined,C:q.choices||undefined,P:q.passage?[q.passage.t,q.passage.x]:undefined,H:(q.hints|0)>0?q.hints|0:undefined};}
+ var c=QG.compactQ(q);if((q.hints|0)>0)c.H=q.hints|0;return c;}
 function expand(c){
  if(c&&c.S){var secs=c.S.map(function(s){return sec(s[0],s[1],s[2]);});
   var eq={topic:c.T,skill:CATALOG[c.k]?CATALOG[c.k].skill:'',level:c.l,kind:c.k,label:KIND_LABELS[c.k]||c.k,prompt:c.g,stmt:c.e,truth:!!c.t,sections:secs,tip:c.i,shortExpl:c.x,mode:c.C?'choice2':'tf',
    userAnswer:c.a===1?true:c.a===0?false:undefined};
-  if(c.C)eq.choices=c.C;if(c.P)eq.passage={t:c.P[0],x:c.P[1]};eq.text=textOf(eq);return eq;}
- return decorate(QG.expandQ(c));}
+  if(c.C)eq.choices=c.C;if(c.P)eq.passage={t:c.P[0],x:c.P[1]};if(c.H===1||c.H===2)eq.hints=c.H;eq.text=textOf(eq);return eq;}
+ var aq=decorate(QG.expandQ(c));if(c&&(c.H===1||c.H===2))aq.hints=c.H;return aq;}
 function pack(qs){return QG.lzPack(JSON.stringify(qs.map(compact)));}
 function unpack(z){var a=JSON.parse(QG.lzUnpack(z));if(!Array.isArray(a))throw new Error('bad');return a.map(expand);}
+function hint(q,stage){var T=REG[q.topic],sk=T&&T.skills.filter(function(s){return s.id===q.kind;})[0];return sk&&sk.hint?sk.hint(q,stage):HN.hint(q,stage);}
 function maxLevelOf(topicId,practice){var T=REG[topicId];return practice?T.practiceMax:T.maxLevel;}
 return {registry:REG,order:ORDER,catalog:CATALOG,topicOf:TOPIC_OF,kindLabels:KIND_LABELS,make:make,decorate:decorate,sectionsOf:sectionsOf,headOf:headOf,textOf:textOf,answerText:answerText,correctText:correctText,
- compact:compact,expand:expand,pack:pack,unpack:unpack,maxLevelOf:maxLevelOf,fmt:fmt,roundTo:roundTo};
+ compact:compact,expand:expand,pack:pack,unpack:unpack,maxLevelOf:maxLevelOf,hint:hint,fmt:fmt,roundTo:roundTo};
 })();
 if(typeof module!=='undefined')module.exports=Topics;
 
@@ -1802,7 +2064,7 @@ var MASTER_STREAK=3, MASTER_SESSIONS=2;  /* mastered = 3 in a row correct, sprea
 var RECENT=10;
 function dayNum(d){var m=/^(\d{4})-(\d\d)-(\d\d)$/.exec(d||'');if(!m)return null;return Math.round(Date.UTC(+m[1],+m[2]-1,+m[3])/86400000);}
 function days(a,b){var x=dayNum(a),y=dayNum(b);return (x==null||y==null)?0:y-x;}
-function newSkill(){return {a:0,c:0,pa:0,pc:0,s:0,ss:0,sid:'',m:0,lm:'',rs:0,r:'',ls:'',l:[]};}
+function newSkill(){return {a:0,c:0,pa:0,pc:0,s:0,ss:0,sid:'',m:0,lm:'',rs:0,r:'',ls:'',l:[],ha:0,hc:0,rh:''};}
 /* first working level of a topic that has no memory yet: English starts from the kid's estimated school grade (from birth month/year); everything else starts at 1 */
 function startLevel(S,t){var g=S&&S.estGrade;if(t==='english'&&g){return g>=6?3:g>=5?2:1;}return 1;}
 function newTopic(S,t){return {lvl:startLevel(S,t),rec:'',pa:0,pc:0,pb:0,pd:''};}
@@ -1815,23 +2077,29 @@ function workLevel(S,t){if(t==='algebra')return S.level||1;return (S.topics&&S.t
 function setWorkLevel(S,t,l){var max=TP.registry[t].maxLevel;l=Math.max(1,Math.min(max,l|0));if(t==='algebra')S.level=l;else topicOf(S,t).lvl=l;}
 function unlockedMax(S,t){var T=TP.registry[t],w=workLevel(S,t),pb=(S.topics&&S.topics[t]&&S.topics[t].pb)||0;return Math.min(T.practiceMax,Math.max(w+3,pb+1));}
 
-/* record one answered question. o: {kind,level,correct,date,sid,mode:'daily'|'practice'} */
+/* record one answered question. o: {kind,level,correct,date,sid,mode:'daily'|'practice',hints:0|1|2}
+   HINTS: the official score never changes (a correct answer is correct, hinted or not). But a correct answer that needed a hint is a LIGHTER signal:
+   it is counted (a/c, pa/pc, and ha/hc), it does NOT extend the unhinted streak that mastery needs (it also does not break it), it does not advance the spaced-review step,
+   it restarts the review clock (so the skill comes back soon), and it does not count toward a topic's level ramp or "best level". A miss is a miss either way. */
 function applyOutcome(S,o){
  var info=TP.catalog[o.kind];if(!info)return null;
- var sk=skillOf(S,o.kind),tp=topicOf(S,info.topic),prac=o.mode==='practice',ok=!!o.correct,sid=o.sid||'';
+ var sk=skillOf(S,o.kind),tp=topicOf(S,info.topic),prac=o.mode==='practice',ok=!!o.correct,sid=o.sid||'',hinted=(o.hints|0)>0,aided=ok&&hinted;
  if(prac){sk.pa++;if(ok)sk.pc++;tp.pa++;if(ok)tp.pc++;}else{sk.a++;if(ok)sk.c++;}
+ if(hinted){sk.ha=(sk.ha||0)+1;if(ok)sk.hc=(sk.hc||0)+1;}
  /* per-level tally [attempts, correct] (daily + practice), kept for the server-side skill-level reports */
  if(!sk.l)sk.l=[];var li=Math.max(1,Math.min(12,o.level|0))-1;while(sk.l.length<=li)sk.l.push([0,0]);sk.l[li]=[sk.l[li][0]+1,sk.l[li][1]+(ok?1:0)];
- sk.r=(sk.r+(ok?'1':'0')).slice(-RECENT);sk.ls=o.date||sk.ls;
- if(ok){
+ var rh=sk.rh||'';while(rh.length<sk.r.length)rh='0'+rh;
+ sk.r=(sk.r+(ok?'1':'0')).slice(-RECENT);sk.rh=(rh+(hinted?'1':'0')).slice(-RECENT);sk.ls=o.date||sk.ls;
+ if(aided){sk.lm=o.date||sk.lm;if(sk.m)sk.rs=0;}
+ else if(ok){
   if(sk.s===0){sk.ss=1;sk.sid=sid;}else if(sk.sid!==sid){sk.ss++;sk.sid=sid;}
   sk.s++;
   if(sk.rs<GAPS.length&&sk.lm&&days(sk.lm,o.date)>=GAPS[sk.rs])sk.rs++;
   sk.m=isMastered(sk)?1:0;
  }else{sk.s=0;sk.ss=0;sk.sid='';sk.m=0;sk.lm=o.date||sk.lm;sk.rs=0;}
- if(prac&&ok&&o.level>(tp.pb||0))tp.pb=o.level;
- /* non-algebra topics track their own working level from answers given AT that level */
- if(info.topic!=='algebra'&&o.level===(tp.lvl||1)){
+ if(prac&&ok&&!hinted&&o.level>(tp.pb||0))tp.pb=o.level;
+ /* non-algebra topics track their own working level from answers given AT that level (hinted-correct answers are neutral) */
+ if(info.topic!=='algebra'&&o.level===(tp.lvl||1)&&!aided){
   tp.rec=(tp.rec+(ok?'1':'0')).slice(-6);var l4=tp.rec.slice(-4);
   if(l4==='1111'&&tp.lvl<TP.registry[info.topic].maxLevel){tp.lvl++;tp.rec='';}
   else if(l4.length===4&&(l4.match(/0/g)||[]).length>=3&&tp.lvl>1){tp.lvl--;tp.rec='';}}
@@ -1843,7 +2111,9 @@ function skillWeight(sk,today){
  var due=isDue(sk,today);
  if(sk.m&&!due){return days(sk.ls,today)>14?0.6:0.25;}
  if(sk.m&&due)return 1.0;
- var len=sk.r.length,miss=(sk.r.match(/0/g)||[]).length,mr=len?miss/len:0;
+ var len=sk.r.length,miss=(sk.r.match(/0/g)||[]).length,rh=sk.rh||'',off=len-rh.length,half=0,i;
+ for(i=0;i<len;i++){if(sk.r.charAt(i)==='1'&&rh.charAt(i-off)==='1')half+=0.5;} /* a hinted-correct counts as half a miss: the skill stays in review longer */
+ var mr=len?(miss+half)/len:0;
  return Math.max(0.2,1+4*mr*Math.min(1,len/4)+(due?2:0));}
 function kindWeights(S,topic,today,focusKind){
  var w={};TP.registry[topic].kinds.forEach(function(k){w[k]=skillWeight(S.skills&&S.skills[k],today);if(focusKind&&k===focusKind)w[k]*=3;});return w;}
@@ -1890,9 +2160,11 @@ function startPractice(S,topic,today,sid,focusKind){
 /* record a practice answer and move the ramp. Returns {promoted} */
 function answerPractice(S,ps,o){
  var ok=!!o.correct,lvl=o.level,ev={promoted:false};
- applyOutcome(S,{kind:o.kind,level:lvl,correct:ok,date:o.date,sid:ps.sid,mode:'practice'});
+ var hinted=(o.hints|0)>0;
+ applyOutcome(S,{kind:o.kind,level:lvl,correct:ok,date:o.date,sid:ps.sid,mode:'practice',hints:o.hints|0});
  ps.total++;if(ok)ps.correct++;
- if(ok){ps.streak++;if(lvl>ps.best)ps.best=lvl;if(lvl>ps.work)ps.above++;
+ if(ok&&hinted){/* correct with a hint: counts as correct, but the ramp only moves on unhinted answers */}
+ else if(ok){ps.streak++;if(lvl>ps.best)ps.best=lvl;if(lvl>ps.work)ps.above++;
   if(ps.streak>=2&&ps.level<ps.max){ps.level++;ps.streak=0;}}
  else{ps.streak=0;ps.above=0;ps.level=Math.max(1,ps.level-1);}
  var tp=topicOf(S,ps.topic),cap=TP.registry[ps.topic].maxLevel;
@@ -1926,7 +2198,7 @@ function seedFromHistory(S,history,unpack){
  S.skills={};S.topics={};
  (history||[]).forEach(function(r){var qs=null;if(r.qz&&unpack){try{qs=unpack(r);}catch(e){qs=null;}}
   if(qs&&qs.length){qs.forEach(function(q){if(q.userAnswer===undefined||!q.kind)return;
-    applyOutcome(S,{kind:q.kind,level:q.level,correct:q.userAnswer===q.truth,date:r.date,sid:'d'+r.date,mode:'daily'});});}
+    applyOutcome(S,{kind:q.kind,level:q.level,correct:q.userAnswer===q.truth,date:r.date,sid:'d'+r.date,mode:'daily',hints:q.hints|0});});}
   else{for(var k in (r.missed||{})){if(!TP.catalog[k])continue;var sk=skillOf(S,k),m=r.missed[k]|0;
     sk.a+=m*2;sk.c+=m;sk.r=(sk.r+'0'.repeat(Math.min(m,3))).slice(-RECENT);sk.ls=r.date;sk.lm=r.date;sk.rs=0;}}});
  return S;}
@@ -1992,6 +2264,7 @@ function cleanSkills(o){var out={};if(!o||typeof o!=='object')return out;
  Object.keys(o).forEach(function(k){if(!Topics.catalog[k]||!o[k]||typeof o[k]!=='object')return;var x=o[k],n=Engine.newSkill();
   ['a','c','pa','pc','s','ss','m','rs'].forEach(function(f){n[f]=num(x[f],100000);});
   n.c=Math.min(n.c,n.a);n.pc=Math.min(n.pc,n.pa);n.m=n.m?1:0;n.rs=Math.min(3,n.rs);
+  n.ha=Math.min(num(x.ha,100000),n.a+n.pa);n.hc=Math.min(num(x.hc,100000),n.ha);n.rh=(typeof x.rh==='string'&&/^[01]{0,10}$/.test(x.rh))?x.rh:'';
   if(Array.isArray(x.l)&&x.l.length<=12&&x.l.every(function(q){return Array.isArray(q)&&q.length===2&&q[0]%1===0&&q[1]%1===0&&q[0]>=0&&q[1]>=0&&q[0]<=100000&&q[1]<=q[0];}))n.l=x.l.map(function(q){return [q[0],q[1]];});
   n.sid=typeof x.sid==='string'?x.sid.slice(0,40):'';n.lm=DRE.test(x.lm)?x.lm:'';n.ls=DRE.test(x.ls)?x.ls:'';n.r=(typeof x.r==='string'&&/^[01]{0,10}$/.test(x.r))?x.r:'';
   out[k]=n;});return out;}
@@ -2104,20 +2377,23 @@ function ensureQuestion(){
   var ps=Q.ps;
   q=Topics.make(Q.topic,{seed:'practice|'+Q.nonce+'|'+Q.topic+'|L'+ps.level+'|q'+Q.idx,level:ps.level,wantTrue:Q.sched[Q.idx%10],weights:Engine.practiceWeights(store,ps,Q.date),avoid:avoid.slice(-30)});}
  Q.qs[Q.idx]=q;}
+/* hints used per question: 0 (none), 1 (nudge) or 2 (specific step); kept with the answers */
+function cleanHints(a,n){var out=[];for(var i=0;i<n;i++)out.push(Array.isArray(a)&&(a[i]===1||a[i]===2)?a[i]:0);return out;}
+function hintsOf(i){return (Q&&Q.hints&&Q.hints[i]===2)?2:(Q&&Q.hints&&Q.hints[i]===1)?1:0;}
 function persist(){if(Q.mode!=='daily')return;
- store.inProgress={date:Q.date,base:Q.base,first:Q.first,sched:Q.sched,plan:Q.plan,snap:Q.snap,wl:Q.wl,qs:Q.qs,answers:Q.answers,streak:Q.streak,best:Q.best};save();enqueue({inProgress:store.inProgress});}
+ store.inProgress={date:Q.date,base:Q.base,first:Q.first,sched:Q.sched,plan:Q.plan,snap:Q.snap,wl:Q.wl,qs:Q.qs,answers:Q.answers,hints:Q.hints,streak:Q.streak,best:Q.best};save();enqueue({inProgress:store.inProgress});}
 function workLevels(){var o={};Topics.order.forEach(function(t){o[t]=Engine.workLevel(store,t);});return o;}
 function startQuiz(mode,fixedQs){
  var date=today();
  if(mode==='daily'&&recFor(date)){render();return;} /* today's score is final */
  var first=mode==='daily'&&isFirst();
  Q={mode:mode,date:date,base:store.level,first:first,sched:G.schedule(date+'|'+store.level+'|'+mode),
-  qs:fixedQs?fixedQs.map(function(q){return q;}):[],answers:[],idx:0,streak:0,best:0,nonce:String(Date.now())};
+  qs:fixedQs?fixedQs.map(function(q){return q;}):[],answers:[],hints:[],idx:0,streak:0,best:0,nonce:String(Date.now())};
  if(mode==='daily'){var pl=Engine.planDaily(store,{date:date,first:first,total:TOTAL});Q.plan=pl.plan;Q.snap=pl.snap;Q.wl=workLevels();}
  renderQuestion();}
 function resumeDaily(){var ip=store.inProgress;
  var plan=Array.isArray(ip.plan)&&ip.plan.length===TOTAL?ip.plan:Array.apply(null,Array(TOTAL)).map(function(){return 'algebra';}); /* quizzes started before topics existed were all algebra */
- Q={mode:'daily',date:ip.date,base:ip.base,first:ip.first,sched:ip.sched,plan:plan,snap:ip.snap||{},wl:ip.wl||workLevels(),qs:ip.qs.map(Topics.decorate),answers:ip.answers,idx:ip.answers.length,streak:ip.streak,best:ip.best,nonce:''};
+ Q={mode:'daily',date:ip.date,base:ip.base,first:ip.first,sched:ip.sched,plan:plan,snap:ip.snap||{},wl:ip.wl||workLevels(),qs:ip.qs.map(Topics.decorate),answers:ip.answers,hints:cleanHints(ip.hints,ip.answers.length),idx:ip.answers.length,streak:ip.streak,best:ip.best,nonce:''};
  Q.qs=Q.qs.slice(0,Q.answers.length);
  if(Q.idx>=TOTAL)finishQuiz();else renderQuestion();}
 /* ---------- practice sessions: the kid picks a topic; batches of 5 or 10; the level ramps up with success ---------- */
@@ -2125,17 +2401,17 @@ function newSid(){return 'p'+Date.now().toString(36)+Math.random().toString(36).
 function masteredSet(){var o={};Object.keys(Topics.catalog).forEach(function(k){var s=store.skills[k];if(s&&s.m)o[k]=1;});return o;}
 function startPracticeSession(topic,focusKind){
  var ps=Engine.startPractice(store,topic,today(),newSid(),focusKind);
- Q={mode:'practice',date:today(),topic:topic,ps:ps,B:batchSize,batch:1,sched:G.schedule('practice|'+Date.now()+'|'+topic),qs:[],answers:[],notes:[],idx:0,streak:0,best:0,nonce:String(Date.now()),m0:masteredSet(),bStart:0};
+ Q={mode:'practice',date:today(),topic:topic,ps:ps,B:batchSize,batch:1,sched:G.schedule('practice|'+Date.now()+'|'+topic),qs:[],answers:[],hints:[],notes:[],idx:0,streak:0,best:0,nonce:String(Date.now()),m0:masteredSet(),bStart:0};
  renderQuestion();}
 function recordPractice(q,val,ok){
  var ps=Q.ps,before=ps.level,lv0=Engine.workLevel(store,Q.topic);
- var ev=Engine.answerPractice(store,ps,{kind:q.kind,level:q.level,correct:ok,date:Q.date});
+ var hu=hintsOf(Q.idx),ev=Engine.answerPractice(store,ps,{kind:q.kind,level:q.level,correct:ok,date:Q.date,hints:hu});
  var note='';
  if(ev.promoted)note='\uD83C\uDF89 You unlocked '+topicLevelName(Q.topic,Engine.workLevel(store,Q.topic))+' for your daily quiz!';
  else if(ps.level>before)note='\u2B06\uFE0F Level up! Your next one is Level '+ps.level+'.';
  else if(ps.level<before)note='\uD83D\uDD3D Let\u2019s try a slightly easier one next, then climb back up.';
  Q.notes[Q.idx]=note;
- var item={seq:Q.idx+1,batch:Q.batch,kind:q.kind,level:q.level,truth:q.truth,answer:val,text:String(q.text).slice(0,400),ts:Date.now()+skew};
+ var item={seq:Q.idx+1,batch:Q.batch,kind:q.kind,level:q.level,truth:q.truth,answer:val,text:String(q.text).slice(0,400),hints:hu,ts:Date.now()+skew};
  var p={practice:{sid:ps.sid,day:Q.date,items:[item]},adapt:JSON.parse(JSON.stringify(Engine.adaptBlob(store)))};
  if(Q.topic==='algebra'&&Engine.workLevel(store,'algebra')!==lv0)p.level=store.level;
  enqueue(p);}
@@ -2172,7 +2448,7 @@ function renderReminder(){
  Q=null;
  show([h('h1',null,'\u270B Before you start'),
   h('div',{class:'card pop'},h('h2',{style:'text-align:center'},'Ready, '+(kid||'super learner')+'?'),
-   h('div',{class:'msg',id:'reminder'},'Take your time, think carefully. Your final score is final: once you answer, you can\u2019t change it. No cheating, do your own best work!'),
+   h('div',{class:'msg',id:'reminder'},'Take your time, think carefully. Your final score is final: once you answer, you can\u2019t change it. Stuck? The \uD83D\uDCA1 Hint button is there to help. Do your own best work!'),
    btn('I\u2019m ready','go',function(){startQuiz('daily');},'ready'),
    btn('\u2B05 Back','gray',render,'reminderback'))]);}
 /* ANSWER MODES: how a question is answered. 'tf' = tap True/False (today). FUTURE ("show your work"): add a 'work' mode here that renders a
@@ -2203,17 +2479,31 @@ function renderQuestion(){
    q.passage?h('div',{class:'passage',id:'passage'},h('b',null,'\uD83D\uDCD6 '+q.passage.t),q.passage.x):null,
    q.prompt?h('div',{class:q.topic==='algebra'?'if':'scn',id:'prompt'},q.prompt):null,
    h('div',{class:'eq'+(long?' txt':'')+(q.topic!=='algebra'&&long?' say':''),id:'eq'},q.stmt),
+   h('div',{id:'hintarea'}),
    ANSWER_MODES[q.mode==='choice2'?'choice2':'tf'](q,answered),
    h('div',{id:'fb'}))];
  show(nodes);
+ renderHintArea();
  if(Q.mode==='retry')nodes[1].appendChild(h('p',{class:'small'},'This is just practice \u2013 it doesn\u2019t change your saved score.'));
  if(isPractice())nodes[1].appendChild(h('p',{class:'small'},'Practice questions don\u2019t change your daily score \u2013 they help pick tomorrow\u2019s questions.'));
  if(answered)renderFeedback();}
+/* HINT button: tap once for a strategy nudge, again for a more specific step. Never gives the answer. Tracked per question as 0/1/2 (hints_used). */
+function renderHintArea(){var box=document.getElementById('hintarea');if(!box)return;box.innerHTML='';
+ var q=Q.qs[Q.idx],n=hintsOf(Q.idx),answered=Q.answers[Q.idx]!==undefined,i;
+ for(i=1;i<=n;i++)box.appendChild(h('div',{class:'hintbox',id:'hint'+i},h('b',null,'\uD83D\uDCA1 Hint '+i),Topics.hint(q,i)));
+ if(n>0&&!answered)box.appendChild(h('p',{class:'hintnote',id:'hintnote'},'Asking for a hint is a smart learning move!'));
+ if(!answered&&n<2){
+  var b=h('button',{class:'btn hint',type:'button',id:'btnHint','aria-label':n?'Show another hint':'Show a hint',onclick:function(){
+   if(Q.answers[Q.idx]!==undefined)return;var m=hintsOf(Q.idx);if(m>=2)return;Q.hints[Q.idx]=m+1;persist();renderHintArea();
+   var hb=document.getElementById('hint'+(m+1));try{hb.scrollIntoView({behavior:'smooth',block:'nearest'});}catch(e){}}},n?'\uD83D\uDCA1 Another hint':'\uD83D\uDCA1 Hint');
+  box.appendChild(h('div',{class:'hintbar'},b));
+  if(n===0)box.appendChild(h('p',{class:'hintnote',id:'hintintro'},'Stuck? Asking for a hint is a smart learning move!'));}
+ else if(!answered&&n>=2)box.appendChild(h('p',{class:'hintnote',id:'hintdone'},'That\u2019s all the hints. You\u2019ve got this!'));}
 function answer(val){
  if(Q.answers[Q.idx]!==undefined)return;var q=Q.qs[Q.idx];Q.answers[Q.idx]=val;var ok=(val===q.truth);
  if(ok){Q.streak++;if(Q.streak>Q.best)Q.best=Q.streak;}else Q.streak=0;
  if(isPractice())recordPractice(q,val,ok);
- persist();disableAnswerButtons();
+ persist();disableAnswerButtons();renderHintArea();
  var st=document.getElementById('streak');st.textContent='\uD83D\uDD25 Streak: '+Q.streak;
  var sl=document.getElementById('sesslv');if(sl)sl.textContent='\uD83D\uDCC8 Best: Level '+(Q.ps.best||q.level);
  var bar=document.querySelector('.progress i');bar.style.width=((posInScreen()+1)/perScreen()*100)+'%';
@@ -2224,7 +2514,7 @@ function renderFeedback(){var q=Q.qs[Q.idx],val=Q.answers[Q.idx],ok=(val===q.tru
  var next=btn(last?(isPractice()?'See my round \uD83C\uDF89':'See my results \uD83C\uDF89'):'Next question \u27A1','go',function(){if(last){if(isPractice())renderBatch();else finishQuiz();}else{Q.idx++;renderQuestion();}},'next');
  var fb,note=isPractice()&&Q.notes[Q.idx]?h('p',{class:'lvnote',id:'lvnote'},Q.notes[Q.idx]):null;
  if(ok){var extra=Q.streak>=5?' \uD83D\uDD25 '+Q.streak+' in a row!':Q.streak===3?' \uD83D\uDD25 3 in a row!':'';
-  fb=h('div',{class:'fb good pop',id:'good'},h('h3',null,'\u2705 '+CHEERS[(Q.idx*3+q.level)%CHEERS.length]+' Correct!'+extra),h('p',null,q.shortExpl),note);}
+  fb=h('div',{class:'fb good pop',id:'good'},h('h3',null,'\u2705 '+CHEERS[(Q.idx*3+q.level)%CHEERS.length]+' Correct!'+extra),h('p',null,q.shortExpl),hintsOf(Q.idx)?h('p',{class:'small',id:'hintfb'},'\uD83D\uDCA1 You used a hint to work this one out, and that is a smart way to learn! Great thinking!'):null,note);}
  else{
   var said=Topics.answerText(q,val),really=Topics.correctText(q);
   fb=h('div',{class:'fb try pop',id:'wrong'},
@@ -2236,7 +2526,7 @@ function renderFeedback(){var q=Q.qs[Q.idx],val=Q.answers[Q.idx],ok=(val===q.tru
  box.appendChild(fb);box.appendChild(next);
  setTimeout(function(){try{box.scrollIntoView({behavior:'smooth',block:'nearest'});}catch(e){}},50);}
 /* ---------- finishing ---------- */
-function withAnswers(){return Q.qs.map(function(q,i){var c={};for(var k in q)c[k]=q[k];c.userAnswer=Q.answers[i];return c;});}
+function withAnswers(){return Q.qs.map(function(q,i){var c={};for(var k in q)c[k]=q[k];c.userAnswer=Q.answers[i];c.hints=hintsOf(i);return c;});}
 function finishQuiz(){
  var results=levelsSoFar(),score=results.filter(Boolean).length,missed={};
  Q.qs.forEach(function(q,i){if(!results[i])missed[q.kind]=(missed[q.kind]||0)+1;});
@@ -2246,9 +2536,9 @@ function finishQuiz(){
   var nd=Engine.algebraNextDay(Q.base,Q.first,endLevel,Q.plan,results).next; /* the algebra level moves on the algebra questions only */
   var rec={date:Q.date,startLevel:Q.base,first:Q.first,score:score,total:TOTAL,missed:missed,levelAfter:nd.level,change:nd.change,best:Q.best,
    texts:Q.qs.map(function(q){return q.text;}),qz:Topics.pack(withAnswers())};
-  var resQ=Q.qs.map(function(q,i){return {kind:q.kind,level:q.level,text:String(q.text).slice(0,400),truth:q.truth,answer:Q.answers[i]};});
+  var resQ=Q.qs.map(function(q,i){return {kind:q.kind,level:q.level,text:String(q.text).slice(0,400),truth:q.truth,answer:Q.answers[i],hints:hintsOf(i)};});
   if(!recFor(Q.date)){
-   Q.qs.forEach(function(q,i){Engine.applyOutcome(store,{kind:q.kind,level:q.level,correct:results[i],date:Q.date,sid:'d'+Q.date,mode:'daily'});}); /* the daily answers feed the same memory as practice */
+   Q.qs.forEach(function(q,i){Engine.applyOutcome(store,{kind:q.kind,level:q.level,correct:results[i],date:Q.date,sid:'d'+Q.date,mode:'daily',hints:hintsOf(i)});}); /* the daily answers feed the same memory as practice */
    store.history.push(rec);store.level=nd.level;store.inProgress=null;prune();save();
    enqueue({rec:rec,result:{questions:resQ},level:nd.level,adapt:JSON.parse(JSON.stringify(Engine.adaptBlob(store)))});
    flush().then(function(){if(lostRace){lostRace=false;resync(true);}});}
@@ -2263,7 +2553,7 @@ function levelMsg(rec){var n=rec.levelAfter;
  var f=focusText(rec.missed);return '\uD83D\uDC4D You\u2019ll stay at '+lvName(n)+' tomorrow.'+(f.length?' We\u2019ll practice '+f.join(' and ')+' a bit more.':' Keep it up!');}
 function scoreMsg(s){return s===10?'PERFECT! \uD83E\uDD29':s>=9?'Amazing! \uD83C\uDF1F':s>=7?'Great job! \uD83D\uDE0A':s>=5?'Nice work! Keep going! \uD83D\uDCAA':'Good effort! Every try makes you stronger! \uD83C\uDF31';}
 function reviewList(rec){return (rec.questions||questionsOf(rec)||[]).map(function(q,i){var ok=q.userAnswer===q.truth;
- var d=h('details',{class:'rev '+(ok?'ok':'no')},h('summary',null,(ok?'\u2705 ':'\uD83D\uDFE0 ')+(i+1)+'. '+(q.topic&&q.topic!=='algebra'&&Topics.registry[q.topic]?Topics.registry[q.topic].emoji+' ':'')+Topics.headOf(q)+'  \u2192 '+Topics.correctText(q)),
+ var d=h('details',{class:'rev '+(ok?'ok':'no')},h('summary',null,(ok?'\u2705 ':'\uD83D\uDFE0 ')+(i+1)+'. '+(q.topic&&q.topic!=='algebra'&&Topics.registry[q.topic]?Topics.registry[q.topic].emoji+' ':'')+Topics.headOf(q)+'  \u2192 '+Topics.correctText(q)+((q.hints|0)>0?'  \uD83D\uDCA1':'')),
   h('div',{class:'inner'},q.passage?h('div',{class:'passage'},h('b',null,q.passage.t),q.passage.x):null,h('p',null,'You '+(q.choices?'picked \u201C':'said ')+Topics.answerText(q,q.userAnswer)+(q.choices?'\u201D':'')+'. '+q.shortExpl),
    ok?null:[Topics.sectionsOf(q).map(function(sc){return [h('h3',null,sc.t),stepsList(sc.l)];}),q.tip?h('div',{class:'tip'},'\uD83D\uDCA1 '+q.tip):null]));return d;});}
 /* "Algebra 5/6 / Fractions 1/2" for a finished quiz */
@@ -2276,18 +2566,21 @@ function renderResults(rec,mode){
  var nodes=[h('h1',null,mode==='daily'?'Quiz complete!':mode==='practice'?'Practice done!':'Practice done!'),
   h('div',{class:'card pop'},h('div',{class:'big'},rec.score+' / '+rec.total),h('div',{style:'text-align:center;font-size:30px;font-weight:900;color:#00b894'},pct(rec)+'%'),h('div',{class:'stars'},stars),h('h2',{style:'text-align:center'},scoreMsg(rec.score)),
    topicBreakdown(rec),
+   hintSummary(rec),
    rec.best?h('p',{style:'text-align:center'},'\uD83D\uDD25 Best streak: '+rec.best):null,
    mode==='daily'?h('div',{class:'msg',id:'levelmsg'},levelMsg(rec)):h('div',{class:'msg'},'This was just for fun \u2013 your saved daily score didn\u2019t change.'),
    (mode==='daily'&&Object.keys(rec.missed).length)?h('p',null,'Skills to keep growing: '+Object.keys(rec.missed).map(function(k){return kl(k);}).join(', ')+'.'):null,
    nextStep(),
    mode==='daily'?h('div',{class:'tip'},'\uD83D\uDCC5 Today\u2019s score is saved and final. Come back tomorrow for a brand-new set of 10 questions!'):null),
   h('div',{class:'card'},h('h2',null,'\uD83D\uDCCB Review today\u2019s questions'),h('p',{class:'small'},'Tap a question to see how it works.'),reviewList(rec),
-   (mode==='daily'||mode==='retry')&&todayRec()?btn('\uD83D\uDD01 Practice today\u2019s questions again (score stays the same)','blue',function(){var r=todayRec(),qs=r&&questionsOf(r);if(qs){startQuiz('retry',qs.map(function(q){var c={};for(var k in q)c[k]=q[k];delete c.userAnswer;return c;}));}}):null,
+   (mode==='daily'||mode==='retry')&&todayRec()?btn('\uD83D\uDD01 Practice today\u2019s questions again (score stays the same)','blue',function(){var r=todayRec(),qs=r&&questionsOf(r);if(qs){startQuiz('retry',qs.map(function(q){var c={};for(var k in q)c[k]=q[k];delete c.userAnswer;delete c.hints;return c;}));}}):null,
    btn('\uD83D\uDCAA Practice more','alt',renderPracticeHome,'practicemore'),
    histBtn(),
    mode!=='daily'?btn('\u2B05 Back to home','gray',render):null),
   logoutBtn()];
  show(nodes);}
+function hintCount(rec){var qs=rec.questions||questionsOf(rec)||[];return qs.filter(function(q){return (q.hints|0)>0;}).length;}
+function hintSummary(rec){var n=hintCount(rec);return n?h('p',{class:'msg',id:'hintsum'},'\uD83D\uDCA1 You used hints on '+n+' question'+(n===1?'':'s')+' to learn. Asking for help is a smart strategy. Great learning!'):null;}
 function todayRec(){var r=recFor(today());return r&&questionsOf(r)?r:null;}
 
 /* ---------- my history ---------- */
