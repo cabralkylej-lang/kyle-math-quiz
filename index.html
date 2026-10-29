@@ -45,6 +45,15 @@ p{font-size:19px;line-height:1.45;margin:8px 0}
 .big{font-size:clamp(54px,16vw,96px);font-weight:900;text-align:center;color:#6c5ce7;line-height:1}
 .stars{text-align:center;font-size:42px;letter-spacing:6px}
 .msg{background:#fff3cd;border-radius:18px;padding:12px 14px;font-size:20px;font-weight:700;margin:10px 0}
+.surp h2{margin:0 0 4px}
+.sbar{height:28px;border-radius:16px;background:#e8e6ff;overflow:hidden;box-shadow:inset 0 3px 5px rgba(45,42,74,.18);margin:10px 0}
+.sbar i{display:block;height:100%;border-radius:16px;background:linear-gradient(90deg,#fdcb6e,#00b894);transition:width .7s ease}
+.surp.full .sbar i{background:linear-gradient(90deg,#00b894,#6c5ce7)}
+.surp .smsg{font-size:20px;font-weight:800;margin:6px 0;text-align:center}
+.surp .spts{font-size:16px;font-weight:700;color:#636e72;text-align:center;margin:2px 0}
+.tpts{margin:8px 0 0;padding:0;list-style:none;font-size:18px;font-weight:700}
+.tpts li{display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px dashed #e8e6ff}
+.tpts li.tot{border-bottom:0;color:#00b894;font-size:20px}
 .rev{border:3px solid #eee;border-radius:18px;margin:10px 0;overflow:hidden}
 .rev summary{padding:12px 14px;font-size:18px;font-weight:700;cursor:pointer;list-style:none}
 .rev summary::-webkit-details-marker{display:none}
@@ -74,7 +83,7 @@ select{font:inherit;font-size:18px;padding:10px;border-radius:12px;border:2px so
 .chart text{font-family:inherit;font-weight:800}
 .pop{animation:pop .35s}
 @keyframes pop{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
-@media (prefers-reduced-motion:reduce){.pop{animation:none}.progress i{transition:none}}
+@media (prefers-reduced-motion:reduce){.pop{animation:none}.progress i{transition:none}.sbar i{transition:none}}
 .sync{position:fixed;right:10px;bottom:10px;z-index:9;border:0;border-radius:99px;padding:8px 14px;font:inherit;font-size:14px;font-weight:800;box-shadow:0 3px 10px rgba(0,0,0,.25);background:#fff;color:#2d2a4a;max-width:80vw}
 .sync.saved{background:#e6fff6;color:#007a5e}.sync.saving{background:#f1f2ff;color:#4834d4}.sync.offline,.sync.error{background:#fff3cd;color:#8a5a00}.sync.auth{background:#ffe3e3;color:#a61e1e;cursor:pointer}
 .btn.kid{font-size:30px;min-height:96px;margin:14px 0}.btn.k1{background:#e84393}.btn.k2{background:#0984e3}
@@ -2298,6 +2307,40 @@ function api(body){
      if(j&&typeof j.now==='number')skew=j.now-Date.now();
      if(r.status>=500)fin({net:true});else fin({s:r.status,j:j||{}});});
    }).catch(function(){fin({net:true});});}catch(e){fin({net:true});}});}
+/* ---------- surprise bar (display only: every number comes from the server; this app can never add points) ---------- */
+var surp=null;
+function setSurp(v){surp=(v&&v.on===true&&typeof v.pct==='number')?v:null;refreshSurprise();}
+function surpMsg(){
+ if(!surp)return '';
+ if(surp.full)return 'Your bar is full! Amazing work! \uD83C\uDF89 Go tell your parents!';
+ var hh=store&&store.history&&store.history.length?store.history[store.history.length-1].date:null,gap=hh?Math.round((new Date(today()+'T12:00:00')-new Date(hh+'T12:00:00'))/86400000):0;
+ if(gap>=3)return 'Welcome back! Your progress is safe.';
+ if(surp.pct>=75)return 'Almost there!';if(surp.pct>=50)return 'Halfway there!';if(surp.pct>=25)return 'Great start!';
+ return 'Every bit of learning fills your surprise bar.';}
+function surpGivenSeen(){return surp&&surp.given_id!=null&&lsGet('kyleMathQuiz.surpSeen.'+kid)===String(surp.given_id);}
+function surpriseCard(){
+ if(!surp)return null;
+ var p=Math.max(0,Math.min(100,surp.pct|0)),tdy=0;for(var k in (surp.today||{}))tdy+=surp.today[k]|0;
+ var given=(surp.given_id!=null&&!surpGivenSeen())?h('div',{class:'msg',id:'surpgiven'},'\uD83C\uDF81 Enjoy your surprise! A new bar has started.',
+  h('div',null,btn('OK','gray',function(){lsSet('kyleMathQuiz.surpSeen.'+kid,String(surp.given_id));var n=document.getElementById('surpgiven');if(n&&n.parentNode)n.parentNode.removeChild(n);},'surpgivenok'))):null;
+ return h('div',{class:'card surp'+(surp.full?' full':''),id:'surprise'},h('h2',null,'\u2B50 Your surprise bar'),given,
+  h('div',{class:'sbar',role:'progressbar','aria-valuemin':'0','aria-valuemax':'100','aria-valuenow':String(p),'aria-label':'Your surprise bar is '+p+' percent full'},h('i',{style:'width:'+p+'%'})),
+  h('div',{class:'smsg',id:'surpmsg'},surpMsg()),
+  h('div',{class:'spts'},(surp.points|0)+' / '+(surp.target|0)+' points'+(tdy>0?'  \u00B7  +'+tdy+' today':'')));}
+var SRC_LABEL={daily:'Finishing today\u2019s quiz + right answers',perfect:'\uD83C\uDF1F Perfect score bonus',streak:'\uD83D\uDD25 Streak bonus',practice:'\uD83D\uDCAA Practice',goal:'\uD83C\uDFAF Practice goal'};
+function todayPointsCard(){
+ if(!surp)return null;var t=surp.today||{},keys=['daily','perfect','streak','practice','goal'].filter(function(k){return (t[k]|0)>0;}),tot=0;
+ keys.forEach(function(k){tot+=t[k]|0;});
+ if(!keys.length)return null;
+ return h('div',{class:'card',id:'todaypts'},h('h2',null,'\u2B50 Points you earned today'),
+  h('ul',{class:'tpts'},keys.map(function(k){return h('li',null,h('span',null,SRC_LABEL[k]),h('span',null,'+'+(t[k]|0)));}),h('li',{class:'tot'},h('span',null,'Total today'),h('span',null,'+'+tot))));}
+/* swap the on-screen cards when new numbers arrive from the server (no re-render, nothing flashes) */
+function refreshSurprise(){
+ if(typeof document==='undefined'||!kid)return;
+ var a=document.getElementById('surprise');if(a&&a.parentNode){var n=surpriseCard();if(n)a.parentNode.replaceChild(n,a);else a.parentNode.removeChild(a);}
+ var b=document.getElementById('todaypts'),m=document.getElementById('resultcard');
+ if(b&&b.parentNode){var n2=todayPointsCard();if(n2)b.parentNode.replaceChild(n2,b);else b.parentNode.removeChild(b);}
+ else if(m&&!b){var n3=todayPointsCard();if(n3&&m.parentNode)m.parentNode.insertBefore(n3,m.nextSibling);}}
 /* ---------- sync queue + "saved" indicator ---------- */
 var syncEl=null,flushing=false,flushTimer=null,retryTimer=null,syncState='';
 function setSync(st){syncState=st;
@@ -2331,7 +2374,7 @@ function flush(){
    if(r.net){flushing=false;setSync('offline');retryTimer=setTimeout(flush,15000);return;}
    if(r.s===401){token=null;try{sessionStorage.removeItem(SS);}catch(e){}flushing=false;setSync('auth');return;}
    var item=pending.shift();save();
-   if(r.s===200){if(r.j.duplicate&&item.rec)lostRace=true;}else hadErr=true; /* a rejected item is dropped so the queue never jams */
+   if(r.s===200){if(r.j.duplicate&&item.rec)lostRace=true;if(r.j.surprise)setSurp(r.j.surprise);}else hadErr=true; /* a rejected item is dropped so the queue never jams */
    return step();});}
  return step();}
 var lostRace=false;
@@ -2343,7 +2386,7 @@ function h(tag,attrs){var e=document.createElement(tag);
  function add(c){if(c==null||c===false)return;if(Array.isArray(c))c.forEach(add);else e.appendChild(typeof c==='object'?c:document.createTextNode(String(c)));}
  for(var i=2;i<arguments.length;i++)add(arguments[i]);return e;}
 function btn(text,cls,fn,id){return h('button',{class:'btn '+cls,type:'button',onclick:fn,id:id||''},text);}
-function show(nodes){keyHandler=nextKH;nextKH=null;app.innerHTML='';nodes.forEach(function(n){app.appendChild(n);});window.scrollTo(0,0);setSync(syncState);}
+function show(nodes){keyHandler=nextKH;nextKH=null;app.innerHTML='';nodes.forEach(function(n){if(n)app.appendChild(n);});window.scrollTo(0,0);setSync(syncState);}
 function lvName(l){return 'Level '+l+' \u2013 '+G.LEVEL_NAMES[l-1];}
 function stepsList(lines){return h('ol',{class:'steps'},lines.map(function(l){return h('li',null,l);}));}
 /* what the planner will lean on next: the skills with the highest weight (recent misses, due for review, not mastered) */
@@ -2381,7 +2424,7 @@ function ensureQuestion(){
 function cleanHints(a,n){var out=[];for(var i=0;i<n;i++)out.push(Array.isArray(a)&&(a[i]===1||a[i]===2)?a[i]:0);return out;}
 function hintsOf(i){return (Q&&Q.hints&&Q.hints[i]===2)?2:(Q&&Q.hints&&Q.hints[i]===1)?1:0;}
 function persist(){if(Q.mode!=='daily')return;
- store.inProgress={date:Q.date,base:Q.base,first:Q.first,sched:Q.sched,plan:Q.plan,snap:Q.snap,wl:Q.wl,qs:Q.qs,answers:Q.answers,hints:Q.hints,streak:Q.streak,best:Q.best};save();enqueue({inProgress:store.inProgress});}
+ store.inProgress={date:Q.date,base:Q.base,first:Q.first,sched:Q.sched,plan:Q.plan,snap:Q.snap,wl:Q.wl,qs:Q.qs,answers:Q.answers,hints:Q.hints,streak:Q.streak,best:Q.best,t0:Q.t0};save();enqueue({inProgress:store.inProgress});}
 function workLevels(){var o={};Topics.order.forEach(function(t){o[t]=Engine.workLevel(store,t);});return o;}
 function startQuiz(mode,fixedQs){
  var date=today();
@@ -2389,11 +2432,11 @@ function startQuiz(mode,fixedQs){
  var first=mode==='daily'&&isFirst();
  Q={mode:mode,date:date,base:store.level,first:first,sched:G.schedule(date+'|'+store.level+'|'+mode),
   qs:fixedQs?fixedQs.map(function(q){return q;}):[],answers:[],hints:[],idx:0,streak:0,best:0,nonce:String(Date.now())};
- if(mode==='daily'){var pl=Engine.planDaily(store,{date:date,first:first,total:TOTAL});Q.plan=pl.plan;Q.snap=pl.snap;Q.wl=workLevels();}
+ if(mode==='daily'){var pl=Engine.planDaily(store,{date:date,first:first,total:TOTAL});Q.plan=pl.plan;Q.snap=pl.snap;Q.wl=workLevels();Q.t0=Date.now();persist();} /* lets the server see when today\u2019s quiz started */
  renderQuestion();}
 function resumeDaily(){var ip=store.inProgress;
  var plan=Array.isArray(ip.plan)&&ip.plan.length===TOTAL?ip.plan:Array.apply(null,Array(TOTAL)).map(function(){return 'algebra';}); /* quizzes started before topics existed were all algebra */
- Q={mode:'daily',date:ip.date,base:ip.base,first:ip.first,sched:ip.sched,plan:plan,snap:ip.snap||{},wl:ip.wl||workLevels(),qs:ip.qs.map(Topics.decorate),answers:ip.answers,hints:cleanHints(ip.hints,ip.answers.length),idx:ip.answers.length,streak:ip.streak,best:ip.best,nonce:''};
+ Q={mode:'daily',date:ip.date,base:ip.base,first:ip.first,sched:ip.sched,plan:plan,snap:ip.snap||{},wl:ip.wl||workLevels(),qs:ip.qs.map(Topics.decorate),answers:ip.answers,hints:cleanHints(ip.hints,ip.answers.length),idx:ip.answers.length,streak:ip.streak,best:ip.best,nonce:'',t0:(typeof ip.t0==='number'&&ip.t0>0)?ip.t0:null};
  Q.qs=Q.qs.slice(0,Q.answers.length);
  if(Q.idx>=TOTAL)finishQuiz();else renderQuestion();}
 /* ---------- practice sessions: the kid picks a topic; batches of 5 or 10; the level ramps up with success ---------- */
@@ -2540,7 +2583,9 @@ function finishQuiz(){
   if(!recFor(Q.date)){
    Q.qs.forEach(function(q,i){Engine.applyOutcome(store,{kind:q.kind,level:q.level,correct:results[i],date:Q.date,sid:'d'+Q.date,mode:'daily',hints:hintsOf(i)});}); /* the daily answers feed the same memory as practice */
    store.history.push(rec);store.level=nd.level;store.inProgress=null;prune();save();
-   enqueue({rec:rec,result:{questions:resQ},level:nd.level,adapt:JSON.parse(JSON.stringify(Engine.adaptBlob(store)))});
+   var fin={rec:rec,result:{questions:resQ},level:nd.level,adapt:JSON.parse(JSON.stringify(Engine.adaptBlob(store)))};
+   if(typeof Q.t0==='number'&&Q.t0>0)fin.elapsed_ms=Math.max(0,Math.min(21600000,Date.now()-Q.t0)); /* only a fallback: the server measures the time itself */
+   enqueue(fin);
    flush().then(function(){if(lostRace){lostRace=false;resync(true);}});}
   renderResults(recFor(Q.date)||rec,'daily');}
  else{renderResults({date:Q.date,startLevel:Q.base,score:score,total:TOTAL,missed:missed,best:Q.best,questions:withAnswers()},Q.mode);}}
@@ -2564,7 +2609,7 @@ function topicBreakdown(rec){var qs=rec.questions||questionsOf(rec);if(!qs)retur
 function renderResults(rec,mode){
  var stars=rec.score>=9?'\u2B50\u2B50\u2B50':rec.score>=7?'\u2B50\u2B50':rec.score>=5?'\u2B50':'\uD83C\uDF31';
  var nodes=[h('h1',null,mode==='daily'?'Quiz complete!':mode==='practice'?'Practice done!':'Practice done!'),
-  h('div',{class:'card pop'},h('div',{class:'big'},rec.score+' / '+rec.total),h('div',{style:'text-align:center;font-size:30px;font-weight:900;color:#00b894'},pct(rec)+'%'),h('div',{class:'stars'},stars),h('h2',{style:'text-align:center'},scoreMsg(rec.score)),
+  h('div',{class:'card pop',id:'resultcard'},h('div',{class:'big'},rec.score+' / '+rec.total),h('div',{style:'text-align:center;font-size:30px;font-weight:900;color:#00b894'},pct(rec)+'%'),h('div',{class:'stars'},stars),h('h2',{style:'text-align:center'},scoreMsg(rec.score)),
    topicBreakdown(rec),
    hintSummary(rec),
    rec.best?h('p',{style:'text-align:center'},'\uD83D\uDD25 Best streak: '+rec.best):null,
@@ -2572,6 +2617,8 @@ function renderResults(rec,mode){
    (mode==='daily'&&Object.keys(rec.missed).length)?h('p',null,'Skills to keep growing: '+Object.keys(rec.missed).map(function(k){return kl(k);}).join(', ')+'.'):null,
    nextStep(),
    mode==='daily'?h('div',{class:'tip'},'\uD83D\uDCC5 Today\u2019s score is saved and final. Come back tomorrow for a brand-new set of 10 questions!'):null),
+  (mode==='daily'||mode==='practice')?todayPointsCard():null,
+  (mode==='daily'||mode==='practice')?surpriseCard():null,
   h('div',{class:'card'},h('h2',null,'\uD83D\uDCCB Review today\u2019s questions'),h('p',{class:'small'},'Tap a question to see how it works.'),reviewList(rec),
    (mode==='daily'||mode==='retry')&&todayRec()?btn('\uD83D\uDD01 Practice today\u2019s questions again (score stays the same)','blue',function(){var r=todayRec(),qs=r&&questionsOf(r);if(qs){startQuiz('retry',qs.map(function(q){var c={};for(var k in q)c[k]=q[k];delete c.userAnswer;delete c.hints;return c;}));}}):null,
    btn('\uD83D\uDCAA Practice more','alt',renderPracticeHome,'practicemore'),
@@ -2744,10 +2791,10 @@ function renderPin(name,msg){
  show(pinShell(name,'Hi '+name+'! \uD83D\uDC4B','Type your PIN',pad,null));
  if(msg)pinMsg(msg);}
 function logout(){
- var go=function(){try{sessionStorage.removeItem(SS);}catch(e){}clearTimeout(flushTimer);clearTimeout(retryTimer);renderPicker();};
+ var go=function(){surp=null;try{sessionStorage.removeItem(SS);}catch(e){}clearTimeout(flushTimer);clearTimeout(retryTimer);renderPicker();};
  if(token&&pending.length){var done=false,fin=function(){if(!done){done=true;go();}};flush().then(fin);setTimeout(fin,3000);}else go();}
 function enterSession(name,tok){
- kid=name;token=tok;lostRace=false;try{sessionStorage.setItem(SS,JSON.stringify({kid:name,token:tok}));}catch(e){}
+ kid=name;token=tok;lostRace=false;surp=null;try{sessionStorage.setItem(SS,JSON.stringify({kid:name,token:tok}));}catch(e){}
  cacheLoad();setSync('saving');
  show([h('h1',null,'\uD83E\uDDE0 Daily Brain Quiz'),h('div',{class:'card pop'},h('h2',{style:'text-align:center'},'Loading '+name+'\u2019s progress\u2026'))]);
  flush().then(function(){return resync(false);});}
@@ -2757,6 +2804,7 @@ function resync(rerender){
  return api({action:'load',token:token}).then(function(r){
   if(r.s===401){token=null;try{sessionStorage.removeItem(SS);}catch(e){}renderPin(kid,'Please type your PIN again.');return;}
   if(r.s===200){
+   setSurp(r.j.surprise);
    profile=(r.j.profile&&typeof r.j.profile.age==='number'&&typeof r.j.profile.grade==='number')?{age:r.j.profile.age,grade:r.j.profile.grade}:null;
    if(!pending.length){var s=adopt(normalize(r.j.state));store=s||blank();save();setSync('saved');}
    else if(profile)store.estGrade=profile.grade;
@@ -2820,7 +2868,7 @@ function render(){
  var ip=store.inProgress;
  if(ip&&ip.date===today()&&ip.answers&&ip.answers.length>0){
   show([h('h1',null,'Daily Brain Quiz'),h('div',{class:'card pop'},h('h2',null,'Welcome back, '+kid+'! \uD83D\uDC4B'),h('p',null,'You\u2019re on question '+(ip.answers.length+1)+' of '+TOTAL+'.'),
-   btn('Keep going \u25B6','go',resumeDaily,'resume'),histBtn()),logoutBtn()]);return;}
+   btn('Keep going \u25B6','go',resumeDaily,'resume'),histBtn()),surpriseCard(),logoutBtn()]);return;}
  var first=isFirst(),f=focusSkills(2),ds=dayStreak();
  show([h('h1',null,'\uD83E\uDDE0 Daily Brain Quiz'),h('div',{class:'sub',id:'whoami'},'Hi '+kid+'! \uD83D\uDC4B'),
   h('div',{class:'card pop'},
@@ -2830,7 +2878,7 @@ function render(){
    (!first&&f.length)?h('p',{class:'small'},'\uD83C\uDFAF Extra practice today on: '+f.join(', ')):null,
    h('div',{class:'tip'},'Example: If M = 49, is M \u00F7 7 = 7 true? Plug it in: 49 \u00F7 7 = 7. Yes, TRUE!'),
    btn('Start today\u2019s quiz \u25B6','go',renderReminder,'start'),btn('\uD83D\uDCAA Practice a topic','alt',renderPracticeHome,'practicebtn'),store.history.length?histBtn():null),
-  logoutBtn()]);}
+  surpriseCard(),logoutBtn()]);}
 document.addEventListener('visibilitychange',function(){if(!document.hidden&&kid&&!Q&&token){flush().then(function(){if(!pending.length&&!Q)resync(false);});}});
 /* ---------- boot: resume this tab's session, otherwise ask who is playing ---------- */
 (function boot(){

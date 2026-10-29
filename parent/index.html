@@ -42,6 +42,15 @@ tr.tp td{background:#f8f9fa}
 .q{border-bottom:1px solid #dfe6e9;padding:8px 0}
 .q .t{white-space:pre-wrap;word-break:break-word}
 .yes{color:#0a7a55;font-weight:700}.no{color:#b33a3a;font-weight:700}
+.bar{height:18px;border-radius:10px;background:#dfe6e9;overflow:hidden;margin:8px 0}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#fdcb6e,#00b894)}
+.pill{display:inline-block;border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;background:#dfe6e9;color:#2d3436}
+.pill.on{background:#c8f7e4;color:#065f46}.pill.pause{background:#ffeaa7;color:#6c4a00}
+.ready{background:#e8fff5;border:2px solid #00b894;border-radius:10px;padding:10px;margin:10px 0}
+.ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.nt{min-width:12em;word-break:break-word}
+.ctl label{font-size:13px;color:#555}
+input.nm{width:7em}input.note{width:100%}
 .warn{background:#fff8e1;border-left:4px solid #fdcb6e;padding:8px 10px;border-radius:6px;font-size:13px}
 </style>
 </head>
@@ -57,7 +66,7 @@ var KIDS=['Lillian','Christian'];
 var LEVEL_NAMES=['Number Newbie','Times-Table Tiger','Number Ninja','Puzzle Solver','Equation Explorer','Brain Builder','Balance Master','Parentheses Pro','Algebra Ace','Math Wizard'];
 var MIN_ATT=5;
 var app=document.getElementById('app');
-var token=null,expiresAt=0,data=null,curKid=KIDS[0],timer=null,skew=0;
+var token=null,expiresAt=0,data=null,curKid=KIDS[0],timer=null,skew=0,spData=null,spMsg={},spBusy=false;
 
 /* ---------- tiny DOM helper (text only: nothing from the server is ever inserted as HTML) ---------- */
 function h(tag,attrs){var e=document.createElement(tag);
@@ -80,7 +89,7 @@ function authed(body){body.token=token;return api(body).then(function(r){if(r.s=
 
 /* ---------- session ---------- */
 function saveSession(){try{sessionStorage.setItem(SS,JSON.stringify({t:token,e:expiresAt}));}catch(e){}}
-function endSession(msg){token=null;expiresAt=0;data=null;if(timer){clearInterval(timer);timer=null;}try{sessionStorage.removeItem(SS);}catch(e){}renderLogin(msg);}
+function endSession(msg){token=null;expiresAt=0;data=null;spData=null;spMsg={};if(timer){clearInterval(timer);timer=null;}try{sessionStorage.removeItem(SS);}catch(e){}renderLogin(msg);}
 function startTimer(){if(timer)clearInterval(timer);timer=setInterval(function(){var left=expiresAt-Date.now();if(left<=0)endSession('Your 30-minute session ended. Please sign in again.');else{var s=document.getElementById('sessleft');if(s)s.textContent=Math.max(1,Math.ceil(left/60000))+' min';}},15000);}
 
 /* ---------- login ---------- */
@@ -132,9 +141,10 @@ function renderMain(){
   h('p',{class:'small'},'Only for grown-ups. Everything here is sent by the server after you sign in; the kids\u2019 app has none of it.'),
   tabs];
  if(!kd||!kd.exists){nodes.push(h('div',{class:'card'},h('p',null,curKid+' has not created a PIN yet.')));}
- else{nodes.push(summaryCard(kd),weakCard(kd),hintsCard(kd),gradesCard(kd),topicsCard(kd),psychCard(kd),historyCard(kd),practiceCard(kd),biweeklyCard(kd),levelCard(kd));}
+ else{nodes.push(summaryCard(kd),surpriseCard(kd),weakCard(kd),hintsCard(kd),gradesCard(kd),topicsCard(kd),psychCard(kd),historyCard(kd),practiceCard(kd),biweeklyCard(kd),levelCard(kd));}
  nodes.push(explainCard(),pinCard());
- show(nodes);}
+ show(nodes);
+ if(kd&&kd.exists&&!spData)loadSurprise();}
 
 function summaryCard(kd){
  var s=kd.summary||{},p=kd.profile||{};
@@ -244,6 +254,67 @@ function pinCard(){
  return h('div',{class:'card',id:'pincard'},h('h2',null,'Parent PIN'),
   h('div',{class:'warn',id:'pinadvice'},'A 4-digit PIN is weak: there are only 10,000 possibilities. This page slows guessing down (5 wrong tries lock it for 15 minutes, then for longer each time), but a longer PIN (6\u20138 digits) is much safer. You can change it here any time.'),
   h('p',null,cur,' ',n1,' ',n2),b,msg);}
+
+/* ---------- surprise tracker (all numbers come from the server; the app never says what the surprise is) ---------- */
+var SP_MIN=200,SP_MAX=1500;
+var NYF=null;try{NYF=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}catch(e){}
+function when(ts){if(!ts)return '\u2014';var t=String(ts).replace(' ','T');if(/[+-]\d\d$/.test(t))t+=':00';var d=new Date(t);if(isNaN(d.getTime()))return String(ts);return (NYF?NYF.format(d):d.toISOString())+' ET';}
+function spKid(n){return spData?(spData.kids||[]).filter(function(k){return k.kid===n;})[0]||null:null;}
+function loadSurprise(){
+ return authed({action:'surprise_overview'}).then(function(r){if(!r)return;
+  if(r.s===200&&r.j&&Array.isArray(r.j.kids)){spData=r.j;spMsg={};}else spMsg[curKid]={bad:true,t:r.net?'Cannot reach the server.':'Could not load the surprise tracker.'};
+  var c=document.getElementById('surprise');if(c&&c.parentNode)c.parentNode.replaceChild(surpriseCard(kidData(curKid)),c);});}
+function spCall(kid,body,okText){
+ if(spBusy)return;spBusy=true;body.kid=kid;
+ authed(body).then(function(r){spBusy=false;if(!r)return;
+  if(r.s===200&&r.j&&r.j.status){var i=-1;(spData.kids||[]).forEach(function(k,x){if(k.kid===kid)i=x;});var nk={};for(var q in r.j)if(q!=='ok')nk[q]=r.j[q];if(i>=0)spData.kids[i]=nk;spMsg[kid]={t:okText};}
+  else{var e=r.j&&r.j.error,t=r.net?'Cannot reach the server.':e==='undo_expired'?'The 24-hour undo window has passed.':e==='another_ready'?'Another bar is already waiting. Mark that one given first.':e==='not_ready'?'That bar is no longer waiting. Refreshing.':e==='not_given'?'That bar is not marked given.':e==='bad_input'?'Please check the values.':'Could not save. Please try again.';
+   spMsg[kid]={bad:true,t:t};if(e==='not_ready'||e==='not_given')spData=null;}
+  var c=document.getElementById('surprise');if(c&&c.parentNode)c.parentNode.replaceChild(surpriseCard(kidData(kid)),c);
+  if(!spData)loadSurprise();});}
+function surpriseCard(kd){
+ var name=kd?kd.name:curKid,box=h('div',{class:'card',id:'surprise'},h('h2',null,'\uD83C\uDF81 Surprise tracker'));
+ var k=spKid(name),m=spMsg[name];
+ if(!k){box.appendChild(m?h('p',{class:'msg'},m.t):h('p',{class:'small'},'Loading\u2026'));return box;}
+ var st=k.status||{},cycles=k.cycles||[],on=st.enabled===true,paused=st.paused===true;
+ box.appendChild(h('p',{class:'small',id:'sp-about'},'The kids see only a progress bar that fills as they learn. The app never says what the surprise is and never mentions a monthly limit. You decide what it is and when it is given.'));
+ box.appendChild(h('div',{class:'row'},h('div',null,h('span',{class:'pill '+(on?(paused?'pause':'on'):''),id:'sp-state'},on?(paused?'On \u00B7 paused':'On'):'Off')),
+  h('div',null,h('button',{type:'button',id:'sp-toggle',class:on?'gray sm':'sm',onclick:function(){
+    if(!on&&!window.confirm('Turn the surprise bar on for '+name+'? It starts at 0 and only counts new learning.'))return;
+    spCall(name,{action:'surprise_set',enabled:!on},on?'Turned off. Points are kept but nothing new is added.':'Turned on. The bar starts counting from now.');}},on?'Turn off':'Turn on'),' ',
+   on?h('button',{type:'button',id:'sp-pause',class:'gray sm',onclick:function(){spCall(name,{action:'surprise_set',paused:!paused},paused?'Resumed.':'Paused: points keep building quietly, but no bar will finish until you resume.');}},paused?'Resume':'Pause'):null)));
+ var tgt=num(st.target)||500,pts=num(st.points)||0,pc=Math.max(0,Math.min(100,num(st.pct)||0));
+ box.appendChild(h('div',{class:'bar',role:'progressbar','aria-valuemin':'0','aria-valuemax':'100','aria-valuenow':String(pc),'aria-label':name+'\u2019s bar is '+pc+' percent full',id:'sp-bar'},h('i',{style:'width:'+pc+'%'})));
+ box.appendChild(h('p',{id:'sp-nums'},pts+' / '+tgt+' points ('+pc+'%) \u00B7 lifetime '+(num(st.lifetime)||0)+' \u00B7 streak '+(num(st.streak)||0)+' day'+((num(st.streak)||0)===1?'':'s')+' (best '+(num(st.best_streak)||0)+')'));
+ box.appendChild(h('p',{class:'small',id:'sp-month'},'Unlocked this month: '+(num(k.month_used)||0)+' of '+(num(k.max_per_month)||2)+'. A bar that fills after the limit waits until next month.'));
+ var rdy=cycles.filter(function(c){return c.status==='ready';})[0];
+ if(rdy){var note=h('input',{id:'sp-note',class:'note',type:'text',maxlength:'200','aria-label':'Private note (only you see it)',placeholder:'Private note, e.g. what you gave (only you see this)'});
+  box.appendChild(h('div',{class:'ready',id:'sp-ready'},h('b',null,'\uD83C\uDF89 '+name+'\u2019s bar is full'+(rdy.ready_at?' ('+when(rdy.ready_at)+')':'')+'.'),h('p',{class:'small'},'The kid has been told to find a parent. When you have given the surprise, mark it here. A new bar starts at once.'),note,
+   h('div',{class:'ctl'},h('button',{type:'button',id:'sp-given',onclick:function(){spCall(name,{action:'surprise_mark_given',cycle_id:rdy.id,note:note.value.trim()},'Marked as given. A new bar has started. You can undo for 24 hours.');}},'Mark surprise given'))));}
+ else if(st.state==='full'){box.appendChild(h('div',{class:'warn',id:'sp-held'},'The bar is full but is being held (the tracker is paused, or this month\u2019s limit is used). It opens when that clears. The kid still sees a full bar.'));}
+ var und=cycles.filter(function(c){return c.can_undo;})[0];
+ if(und)box.appendChild(h('div',{class:'ctl',id:'sp-undorow'},h('span',{class:'small'},'Bar #'+und.seq+' was marked given '+when(und.given_at)+'. Undo is possible until '+when(und.undo_until)+'.'),h('button',{type:'button',class:'gray sm',id:'sp-undo',onclick:function(){spCall(name,{action:'surprise_undo',cycle_id:und.id},'Undone: the bar is waiting again.');}},'Undo')));
+ var t=h('input',{id:'sp-target',class:'nm',type:'number',min:String(SP_MIN),max:String(SP_MAX),step:'50',value:String(tgt),'aria-label':'Points needed per bar'});
+ var mx=h('select',{id:'sp-max','aria-label':'Surprises allowed per month'},[1,2,3,4].map(function(n){var o=h('option',{value:String(n)},String(n));if(n===(num(k.max_per_month)||2))o.selected=true;return o;}));
+ box.appendChild(h('div',{class:'ctl'},h('label',null,'Points per bar (200\u20131500) '),t,h('label',null,' Max per month (1\u20134) '),mx,
+  h('button',{type:'button',id:'sp-save',class:'sm',onclick:function(){var tv=parseInt(t.value,10),mv=parseInt(mx.value,10);
+   if(!(tv>=SP_MIN&&tv<=SP_MAX)){spMsg[name]={bad:true,t:'Points per bar must be between 200 and 1500.'};var c=document.getElementById('surprise');c.parentNode.replaceChild(surpriseCard(kd),c);return;}
+   spCall(name,{action:'surprise_set',target:tv,max_per_month:mv},'Saved.');}},'Save')));
+ box.appendChild(h('p',{class:'small'},'A higher target applies to the bar in progress too. If you lower it, a bar that is already past the new target fills right away. At 500 points: about 7 days at maximum effort, 12 with a perfect quiz every day, 16\u201318 for a typical kid, and 5 weeks or more for light use (scale these with the target).'));
+ if(m)box.appendChild(h('div',{class:m.bad?'msg':'ok',id:'sp-msg','aria-live':'polite'},m.t));
+ /* history of bars */
+ var hist=cycles.map(function(c){return h('tr',null,h('td',null,'#'+c.seq),h('td',null,c.status),h('td',null,String(c.points)+' / '+c.target),h('td',null,when(c.ready_at||c.full_at)),h('td',null,c.status==='given'?when(c.given_at):'\u2014'),h('td',null,c.unlock_month||'\u2014'),h('td',{class:'nt'},c.note||''));});
+ box.appendChild(h('h3',null,'Bars'));
+ box.appendChild(hist.length?h('div',{class:'tw'},h('table',{id:'sp-hist'},h('tr',null,h('th',null,'Bar'),h('th',null,'Status'),h('th',null,'Points'),h('th',null,'Full'),h('th',null,'Given'),h('th',null,'Month'),h('th',null,'Your note')),hist)):h('p',{class:'small'},'No bars yet.'));
+ /* last 14 days by source */
+ var by={},order=[];(k.days||[]).forEach(function(d){if(!by[d.day]){by[d.day]={};order.push(d.day);}by[d.day][d.source]=num(d.points)||0;});
+ var SRC=['daily','perfect','streak','practice','goal'];
+ var drows=order.map(function(day){var o=by[day],tot=0;SRC.forEach(function(x){tot+=o[x]||0;});return h('tr',null,h('td',null,day),SRC.map(function(x){return h('td',null,String(o[x]||0));}),h('td',null,String(tot)));});
+ box.appendChild(h('h3',null,'Last 14 days'));
+ box.appendChild(drows.length?h('div',{class:'tw'},h('table',{id:'sp-days'},h('tr',null,h('th',null,'Day'),h('th',null,'Quiz'),h('th',null,'Perfect'),h('th',null,'Streak'),h('th',null,'Practice'),h('th',null,'Goal'),h('th',null,'Total')),drows)):h('p',{class:'small'},'No points yet.'));
+ var fl=(k.flags||[]).filter(function(f){return f.ignored_fast||f.low;});
+ if(fl.length)box.appendChild(h('div',{class:'warn',id:'sp-flags'},fl.map(function(f){return h('div',null,f.day+': '+(f.ignored_fast?'the daily quiz was finished very fast, so only the finishing points counted. ':'')+(f.low?'practice accuracy was low, so practice points were held back. ':''));})));
+ return box;}
 
 /* ---------- full quiz review ---------- */
 function backBar(){return h('div',{class:'row'},h('button',{type:'button',class:'gray',id:'backbtn',onclick:renderMain},'\u2190 Back'),h('button',{type:'button',class:'gray sm',onclick:function(){endSession('Signed out.');}},'Sign out'));}
